@@ -2,11 +2,16 @@
   "manifest_version": 3,
   "name": "Request Mocker",
   "version": "1.0.0",
-  "description": "Mock fetch & XHR requests for QA and development",
-  "permissions": ["storage", "tabs"],
+  "description": "Intercept and mock HTTP requests on any webpage",
+  "permissions": ["storage"],
   "host_permissions": ["<all_urls>"],
-  "background": { "service_worker": "background.js" },
-  "action": { "default_popup": "popup.html", "default_title": "Request Mocker" },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Request Mocker"
+  },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
