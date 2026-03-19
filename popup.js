@@ -12,6 +12,23 @@ var enabled = true;
 var editId = null;
 var currentDraft = null;
 
+// ── JSON helpers ─────────────────────────────────────────────────────────────
+function formatJSON(str) {
+  try { return JSON.stringify(JSON.parse(str), null, 2); } catch(e) { return null; }
+}
+
+function updateJSONStatus(value, statusEl) {
+  if (!value.trim()) { statusEl.textContent = ''; return; }
+  try {
+    JSON.parse(value);
+    statusEl.className = 'json-status json-ok';
+    statusEl.textContent = '✓ Valid JSON';
+  } catch(e) {
+    statusEl.className = 'json-status json-err';
+    statusEl.textContent = '✗ ' + e.message;
+  }
+}
+
 // ── Storage ──────────────────────────────────────────────────────────────────
 function load(cb) {
   chrome.storage.local.get({ rules: [], enabled: true, formDraft: null }, function(d) {
@@ -81,6 +98,7 @@ function showForm(id) {
     $('fHeaders').value = '{"Content-Type": "application/json"}';
   }
 
+  updateJSONStatus($('fBody').value, $('jsonStatus'));
   $('viewList').style.display = 'none';
   $('viewForm').style.display = 'flex';
 }
@@ -173,11 +191,47 @@ $('btnAdd').addEventListener('click',    function() { showForm(null); });
 $('btnCancel').addEventListener('click', showList);
 $('btnSave').addEventListener('click',   saveRule);
 
-['fName','fMethod','fStatus','fDelay','fUrl','fBody','fHeaders'].forEach(function(id) {
+['fName','fMethod','fStatus','fDelay','fUrl','fHeaders'].forEach(function(id) {
   $(id).addEventListener('input',  saveDraft);
   $(id).addEventListener('change', saveDraft);
 });
 $('fRegex').addEventListener('change', saveDraft);
+
+// fBody gets its own listener to also update the status indicator
+$('fBody').addEventListener('input', function() {
+  updateJSONStatus($('fBody').value, $('jsonStatus'));
+  saveDraft();
+});
+
+// Format inline
+$('btnFormat').addEventListener('click', function() {
+  var formatted = formatJSON($('fBody').value);
+  if (formatted !== null) $('fBody').value = formatted;
+  updateJSONStatus($('fBody').value, $('jsonStatus'));
+});
+
+// Open fullscreen editor
+$('btnExpand').addEventListener('click', function() {
+  $('fBodyEditor').value = $('fBody').value;
+  updateJSONStatus($('fBodyEditor').value, $('jsonStatusEditor'));
+  $('viewForm').style.display = 'none';
+  $('viewEditor').style.display = 'flex';
+});
+
+// Back from editor → sync content to form
+$('btnEditorBack').addEventListener('click', function() {
+  $('fBody').value = $('fBodyEditor').value;
+  updateJSONStatus($('fBody').value, $('jsonStatus'));
+  $('viewEditor').style.display = 'none';
+  $('viewForm').style.display = 'flex';
+});
+
+// Format inside editor
+$('btnEditorFormat').addEventListener('click', function() {
+  var formatted = formatJSON($('fBodyEditor').value);
+  if (formatted !== null) $('fBodyEditor').value = formatted;
+  updateJSONStatus($('fBodyEditor').value, $('jsonStatusEditor'));
+});
 
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') showList();

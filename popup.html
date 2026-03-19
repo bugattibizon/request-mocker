@@ -191,6 +191,20 @@ select option { background: #fff; color: #1e1f36; }
   font-size: 14px; color: #4a4c6a; cursor: pointer;
 }
 .checkbox-row input { width: 16px; height: 16px; accent-color: #6c5ce7; cursor: pointer; }
+
+.btn-tool {
+  font-size: 11px; font-weight: 600;
+  padding: 3px 10px; border-radius: 20px;
+  border: 1px solid #e4e6f0;
+  background: #f4f5fb; color: #4a4c6a;
+  cursor: pointer; transition: background .15s;
+  white-space: nowrap;
+}
+.btn-tool:hover { background: #e4e6f0; }
+
+.json-status { font-size: 11px; margin-top: 5px; min-height: 16px; font-weight: 500; }
+.json-ok  { color: #00875a; }
+.json-err { color: #cc0000; }
 </style>
 </head>
 <body>
@@ -267,8 +281,15 @@ select option { background: #fff; color: #1e1f36; }
     </div>
 
     <div class="field">
-      <label class="label">Response Body</label>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <label class="label" style="margin-bottom:0">Response Body</label>
+        <div style="display:flex;gap:6px">
+          <button type="button" class="btn-tool" id="btnFormat">Format</button>
+          <button type="button" class="btn-tool" id="btnExpand">↗ Expand</button>
+        </div>
+      </div>
       <textarea id="fBody" placeholder='{"data": [], "ok": true}'></textarea>
+      <div class="json-status" id="jsonStatus"></div>
     </div>
 
     <div class="field">
@@ -281,6 +302,21 @@ select option { background: #fff; color: #1e1f36; }
     <button type="button" class="btn btn-ghost" id="btnCancel">Cancel</button>
     <button type="button" class="btn btn-primary" id="btnSave">Save Rule</button>
   </div>
+</div>
+
+<!-- Editor view (fullscreen body editor) -->
+<div class="view" id="viewEditor" style="display:none;flex-direction:column">
+  <div style="display:flex;align-items:center;gap:10px;padding:14px 20px;background:#fff;border-bottom:1px solid #e4e6f0;flex-shrink:0">
+    <button type="button" class="btn btn-ghost" id="btnEditorBack">← Back</button>
+    <span style="font-size:15px;font-weight:700;color:#1e1f36;flex:1">Response Body</span>
+    <button type="button" class="btn-tool" id="btnEditorFormat">Format</button>
+    <div class="json-status" id="jsonStatusEditor" style="margin-top:0;margin-left:6px"></div>
+  </div>
+  <textarea id="fBodyEditor"
+    style="flex:1;resize:none;border:none;border-radius:0;padding:18px 22px;
+           font-family:'Menlo','Consolas',monospace;font-size:13px;line-height:1.6;
+           outline:none;background:#fafbff;color:#1e1f36;min-height:500px"
+    placeholder='{"data": [], "ok": true}'></textarea>
 </div>
 
 <script src="popup.js"></script>
