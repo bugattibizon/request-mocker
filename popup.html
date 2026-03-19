@@ -10,7 +10,7 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: #0f1117;
   color: #c9cde8;
-  width: 420px;
+  width: 560px;
   display: flex;
   flex-direction: column;
 }
@@ -20,28 +20,28 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 14px;
+  padding: 12px 16px;
   background: #181a2a;
   border-bottom: 1px solid #252840;
   flex-shrink: 0;
 }
-.logo { font-size: 18px; }
-.title { font-size: 14px; font-weight: 600; color: #fff; flex: 1; }
+.logo { font-size: 20px; }
+.title { font-size: 15px; font-weight: 600; color: #fff; flex: 1; }
 .title span { color: #7b6cf6; }
-.count { font-size: 11px; color: #555775; }
+.count { font-size: 12px; color: #555775; }
 
 /* ── Toggle switch ── */
-.toggle { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
+.toggle { position: relative; width: 38px; height: 22px; flex-shrink: 0; }
 .toggle input { display: none; }
 .track {
   position: absolute; inset: 0;
-  background: #2e3050; border-radius: 10px;
+  background: #2e3050; border-radius: 11px;
   cursor: pointer; transition: background .2s;
 }
 .track::before {
   content: '';
   position: absolute;
-  width: 14px; height: 14px;
+  width: 16px; height: 16px;
   left: 3px; top: 3px;
   background: #fff; border-radius: 50%;
   transition: transform .2s;
@@ -54,28 +54,28 @@ body {
 .view.hidden { display: none; }
 
 /* ── Rule list ── */
-.list { max-height: 460px; overflow-y: auto; padding: 8px; }
+.list { max-height: 480px; overflow-y: auto; padding: 10px; }
 .list::-webkit-scrollbar { width: 4px; }
 .list::-webkit-scrollbar-thumb { background: #2e3050; border-radius: 2px; }
 
 .empty {
-  padding: 40px 16px;
+  padding: 48px 16px;
   text-align: center;
   color: #40435e;
   font-size: 13px;
-  line-height: 2;
+  line-height: 2.2;
 }
-.empty-icon { font-size: 30px; margin-bottom: 4px; }
+.empty-icon { font-size: 34px; margin-bottom: 6px; }
 
 .rule {
   background: #181a2a;
   border: 1px solid #252840;
   border-radius: 8px;
-  padding: 8px 10px;
-  margin-bottom: 6px;
+  padding: 10px 12px;
+  margin-bottom: 7px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   transition: border-color .15s, opacity .15s;
 }
 .rule:hover { border-color: #7b6cf6; }
@@ -85,9 +85,9 @@ body {
 .rule-name {
   font-size: 13px; font-weight: 500;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  margin-bottom: 3px; color: #e0e3ff;
+  margin-bottom: 4px; color: #e0e3ff;
 }
-.rule-meta { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; margin-bottom: 2px; }
+.rule-meta { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 3px; }
 .rule-url {
   font-size: 11px; color: #40435e;
   font-family: monospace;
@@ -95,7 +95,7 @@ body {
 }
 
 /* method badges */
-.badge { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px; }
+.badge { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px; }
 .m-GET    { background: #0d2e1c; color: #4dffaa; }
 .m-POST   { background: #2e1d0d; color: #ffad4d; }
 .m-PUT    { background: #1d0d2e; color: #b64dff; }
@@ -103,17 +103,17 @@ body {
 .m-PATCH  { background: #0d1d2e; color: #4db5ff; }
 .m-ANY    { background: #1a1e1a; color: #99ff99; }
 
-.status { font-size: 10px; font-weight: 700; font-family: monospace; }
+.status { font-size: 11px; font-weight: 700; font-family: monospace; }
 .s-ok   { color: #4dffaa; }
 .s-warn { color: #ffad4d; }
 .s-err  { color: #ff4d4d; }
-.meta-text { font-size: 10px; color: #40435e; }
+.meta-text { font-size: 11px; color: #40435e; }
 
-.rule-actions { display: flex; gap: 2px; flex-shrink: 0; }
+.rule-actions { display: flex; gap: 3px; flex-shrink: 0; }
 .icon-btn {
   background: none; border: none; cursor: pointer;
-  color: #40435e; padding: 4px 5px; border-radius: 4px;
-  font-size: 13px; line-height: 1;
+  color: #40435e; padding: 5px 6px; border-radius: 4px;
+  font-size: 14px; line-height: 1;
   transition: color .15s, background .15s;
 }
 .icon-btn:hover { background: #252840; color: #c9cde8; }
@@ -121,13 +121,13 @@ body {
 
 /* ── Footer ── */
 .footer {
-  display: flex; gap: 6px;
-  padding: 8px 10px;
+  display: flex; gap: 8px;
+  padding: 10px 12px;
   border-top: 1px solid #252840;
   background: #181a2a;
 }
 .btn {
-  padding: 7px 12px;
+  padding: 8px 14px;
   border: none; border-radius: 6px;
   font-size: 13px; font-weight: 500;
   cursor: pointer;
@@ -139,39 +139,54 @@ body {
 .btn-ghost:hover { background: #2e3050; }
 
 /* ── Form view ── */
-.form-scroll { max-height: 500px; overflow-y: auto; padding: 12px 14px; }
+.form-scroll { overflow-y: auto; padding: 16px; max-height: 560px; }
 .form-scroll::-webkit-scrollbar { width: 4px; }
 .form-scroll::-webkit-scrollbar-thumb { background: #2e3050; border-radius: 2px; }
-.form-title { font-size: 14px; font-weight: 600; color: #fff; margin-bottom: 14px; }
 
-.field { margin-bottom: 10px; }
+.form-title { font-size: 15px; font-weight: 600; color: #fff; margin-bottom: 16px; }
+.draft-badge {
+  display: inline-block;
+  font-size: 10px; font-weight: 600;
+  background: #2e1d0d; color: #ffad4d;
+  padding: 2px 7px; border-radius: 10px;
+  margin-left: 8px; vertical-align: middle;
+}
+
+.field { margin-bottom: 12px; }
 .label {
   display: block;
-  font-size: 10px; font-weight: 600;
+  font-size: 11px; font-weight: 600;
   text-transform: uppercase; letter-spacing: .5px;
-  color: #555775; margin-bottom: 4px;
+  color: #555775; margin-bottom: 5px;
 }
-.row { display: flex; gap: 8px; }
+.row { display: flex; gap: 10px; }
 .row .field { flex: 1; }
 
 input[type=text], input[type=number], select, textarea {
   width: 100%;
-  background: #0f1117;
+  background: #0d0e1a;
   border: 1px solid #252840;
   color: #c9cde8;
   border-radius: 6px;
-  padding: 6px 9px;
+  padding: 8px 10px;
   font-size: 13px;
   outline: none;
   font-family: inherit;
   transition: border-color .15s;
 }
 input:focus, select:focus, textarea:focus { border-color: #7b6cf6; }
-textarea { resize: vertical; min-height: 64px; font-family: monospace; font-size: 12px; }
+textarea {
+  resize: vertical;
+  min-height: 120px;
+  font-family: 'Menlo', 'Consolas', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+textarea.small { min-height: 60px; }
 select option { background: #181a2a; }
 
 .checkbox-row {
-  display: flex; align-items: center; gap: 7px;
+  display: flex; align-items: center; gap: 8px;
   font-size: 13px; color: #888ab0; cursor: pointer;
 }
 .checkbox-row input { width: 14px; height: 14px; accent-color: #7b6cf6; cursor: pointer; }
@@ -206,7 +221,10 @@ select option { background: #181a2a; }
 <!-- Form view -->
 <div class="view hidden" id="viewForm">
   <div class="form-scroll">
-    <div class="form-title" id="formTitle">New Mock Rule</div>
+    <div class="form-title" id="formTitle">
+      New Mock Rule
+      <span class="draft-badge hidden" id="draftBadge">draft restored</span>
+    </div>
 
     <div class="field">
       <label class="label">Name (optional)</label>
@@ -254,7 +272,7 @@ select option { background: #181a2a; }
 
     <div class="field">
       <label class="label">Response Headers (JSON)</label>
-      <textarea id="fHeaders" style="min-height:48px" placeholder='{"Content-Type": "application/json"}'></textarea>
+      <textarea id="fHeaders" class="small" placeholder='{"Content-Type": "application/json"}'></textarea>
     </div>
   </div>
 
