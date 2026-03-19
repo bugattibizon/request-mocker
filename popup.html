@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Request Mocker</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #13141f; color: #dde0f5;
+  width: 400px; max-height: 560px;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 14px; background: #1e1f30;
+  border-bottom: 1px solid #2e3050; flex-shrink: 0;
+}
+.title { font-size: 14px; font-weight: 600; flex: 1; color: #fff; }
+.title em { color: #7c6af7; font-style: normal; }
+.badge { font-size: 11px; color: #777996; }
+.tw { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
+.tw input { display: none; }
+.sl {
+  position: absolute; inset: 0; background: #3a3c5a;
+  border-radius: 10px; cursor: pointer; transition: background .2s;
+}
+.sl::before {
+  content: ''; position: absolute;
+  width: 14px; height: 14px; left: 3px; top: 3px;
+  background: #fff; border-radius: 50%; transition: transform .2s;
+}
+.tw input:checked + .sl { background: #7c6af7; }
+.tw input:checked + .sl::before { transform: translateX(16px); }
+.list { flex: 1; overflow-y: auto; padding: 8px; }
+.list::-webkit-scrollbar { width: 4px; }
+.list::-webkit-scrollbar-thumb { background: #3a3c5a; border-radius: 2px; }
+.empty { padding: 36px 16px; text-align: center; color: #555770; font-size: 13px; line-height: 1.8; }
+.rule {
+  background: #1e1f30; border: 1px solid #2e3050; border-radius: 8px;
+  padding: 9px 11px; margin-bottom: 6px;
+  display: flex; align-items: center; gap: 9px;
+  transition: border-color .15s, opacity .15s;
+}
+.rule:hover { border-color: #7c6af7; }
+.rule.off { opacity: 0.4; }
+.rb { flex: 1; min-width: 0; }
+.rn {
+  font-size: 13px; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 3px;
+}
+.rt { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; margin-bottom: 2px; }
+.tag { font-size: 10px; padding: 1px 5px; border-radius: 3px; font-weight: 600; }
+.tGET    { background: #1a3b2b; color: #6effa8; }
+.tPOST   { background: #3b2b1a; color: #ffb86a; }
+.tPUT    { background: #2b1a3b; color: #c96eff; }
+.tDELETE { background: #3b1a1a; color: #ff6e6e; }
+.tPATCH  { background: #1a2b3b; color: #6eccff; }
+.tANY    { background: #2b3b2b; color: #aaffaa; }
+.ts { font-size: 10px; color: #aaaacc; font-family: monospace; font-weight: 600; }
+.ts.ok   { color: #6effa8; }
+.ts.warn { color: #ffb86a; }
+.ts.err  { color: #ff6e6e; }
+.tx { font-size: 10px; color: #555770; }
+.ru { font-size: 11px; color: #555770; font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rbtns { display: flex; gap: 3px; flex-shrink: 0; }
+.ib {
+  background: none; border: none; cursor: pointer;
+  color: #555770; padding: 4px; border-radius: 4px;
+  font-size: 13px; line-height: 1;
+  transition: color .15s, background .15s;
+}
+.ib:hover { background: #2e3050; color: #dde0f5; }
+.ib.del:hover { color: #ff6e6e; }
+.footer {
+  display: flex; gap: 7px; padding: 9px 10px;
+  border-top: 1px solid #2e3050;
+  background: #1e1f30; flex-shrink: 0;
+}
+.btn {
+  padding: 7px 12px; border: none; border-radius: 6px;
+  font-size: 13px; font-weight: 500; cursor: pointer;
+  transition: background .15s, transform .1s;
+}
+.btn:active { transform: scale(0.97); }
+.bp { background: #7c6af7; color: #fff; flex: 1; }
+.bp:hover { background: #6a58e5; }
+.bs { background: #2e3050; color: #dde0f5; }
+.bs:hover { background: #3a3c65; }
+.overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,.8); z-index: 50;
+  overflow-y: auto; padding: 12px;
+  align-items: flex-start; justify-content: center;
+}
+.overlay.show { display: flex; }
+.modal {
+  background: #1e1f30; border: 1px solid #2e3050;
+  border-radius: 10px; width: 100%; max-width: 376px;
+  padding: 14px; margin: auto;
+}
+.mh { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: #fff; }
+.fg { margin-bottom: 10px; }
+.lbl {
+  display: block; font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .5px;
+  color: #666880; margin-bottom: 4px;
+}
+.row { display: flex; gap: 8px; }
+.row .fg { flex: 1; }
+input[type=text], input[type=number], select, textarea {
+  width: 100%; background: #13141f; border: 1px solid #2e3050;
+  color: #dde0f5; border-radius: 6px; padding: 6px 9px;
+  font-size: 13px; outline: none; transition: border-color .15s; font-family: inherit;
+}
+input:focus, select:focus, textarea:focus { border-color: #7c6af7; }
+textarea { resize: vertical; min-height: 68px; font-family: monospace; font-size: 12px; }
+select option { background: #1e1f30; }
+.ck { display: flex; align-items: center; gap: 7px; font-size: 13px; color: #888ab0; cursor: pointer; }
+.ck input { width: 14px; height: 14px; accent-color: #7c6af7; cursor: pointer; }
+.ma { display: flex; gap: 8px; margin-top: 14px; }
+.ma .btn { flex: 1; }
+</style>
+</head>
+<body>
+<div class="header">
+  <span style="font-size:16px">🔀</span>
+  <span class="title">Request <em>Mocker</em></span>
+  <span class="badge" id="bdg"></span>
+  <label class="tw" title="Enable / disable all mocking">
+    <input type="checkbox" id="gt">
+    <span class="sl"></span>
+  </label>
+</div>
+
+<div class="list" id="lst">
+  <div class="empty" id="emp">
+    <div style="font-size:28px">🔀</div>
+    <div>No mock rules yet</div>
+    <div style="font-size:11px;color:#3a3c55">Click "Add Mock" to intercept requests</div>
+  </div>
+</div>
+
+<div class="footer">
+  <button class="btn bs" id="bEx">Export</button>
+  <button class="btn bs" id="bIm">Import</button>
+  <button class="btn bp" id="bAdd">+ Add Mock</button>
+</div>
+
+<div class="overlay" id="ov">
+  <div class="modal">
+    <div class="mh" id="mTtl">New Mock Rule</div>
+    <div class="fg">
+      <label class="lbl">Name (optional)</label>
+      <input type="text" id="fNm" placeholder="e.g. Mock user list">
+    </div>
+    <div class="row">
+      <div class="fg">
+        <label class="lbl">Method</label>
+        <select id="fMt">
+          <option value="*">ANY</option>
+          <option value="GET">GET</option>
+          <option value="POST">POST</option>
+          <option value="PUT">PUT</option>
+          <option value="PATCH">PATCH</option>
+          <option value="DELETE">DELETE</option>
+          <option value="HEAD">HEAD</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="lbl">Status</label>
+        <input type="number" id="fSt" value="200" min="100" max="599">
+      </div>
+      <div class="fg">
+        <label class="lbl">Delay ms</label>
+        <input type="number" id="fDl" value="0" min="0">
+      </div>
+    </div>
+    <div class="fg">
+      <label class="lbl">URL Pattern</label>
+      <input type="text" id="fUrl" placeholder="/api/users  or  https://api.example.com/users/.*">
+    </div>
+    <div class="fg">
+      <label class="ck"><input type="checkbox" id="fRx"> Treat as RegExp</label>
+    </div>
+    <div class="fg">
+      <label class="lbl">Response Body</label>
+      <textarea id="fBd" placeholder='{"data": [], "ok": true}'></textarea>
+    </div>
+    <div class="fg">
+      <label class="lbl">Response Headers (JSON)</label>
+      <textarea id="fHd" style="min-height:48px" placeholder='{"Content-Type": "application/json"}'></textarea>
+    </div>
+    <div class="ma">
+      <button class="btn bs" id="mCn">Cancel</button>
+      <button class="btn bp" id="mSv">Save Rule</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var rules = [], enabled = true, editId = null;
+var $ = function(id) { return document.getElementById(id); };
+var uid = function() { return Math.random().toString(36).slice(2) + Date.now().toString(36); };
+function escH(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function load(cb) {
+  chrome.storage.local.get({ rules: [], enabled: true }, function(d) {
+    rules = d.rules; enabled = d.enabled; if (cb) cb();
+  });
+}
+function save(cb) { chrome.storage.local.set({ rules: rules, enabled: enabled }, cb); }
+
+function mTag(m) {
+  var map = { GET:'tGET', POST:'tPOST', PUT:'tPUT', DELETE:'tDELETE', PATCH:'tPATCH', '*':'tANY' };
+  return '<span class="tag ' + (map[m] || 'tANY') + '">' + (m === '*' ? 'ANY' : m) + '</span>';
+}
+function sTag(s) {
+  var n = parseInt(s);
+  var c = n >= 500 ? 'err' : n >= 400 ? 'warn' : 'ok';
+  return '<span class="ts ' + c + '">' + n + '</span>';
+}
+
+function render() {
+  var lst = $('lst'); var emp = $('emp'); var bdg = $('bdg');
+  $('gt').checked = enabled;
+  var act = rules.filter(function(r) { return r.enabled; }).length;
+  bdg.textContent = rules.length ? (act + '/' + rules.length + ' active') : '';
+  var old = lst.querySelectorAll('.rule');
+  for (var i = 0; i < old.length; i++) old[i].remove();
+  if (!rules.length) { emp.style.display = ''; return; }
+  emp.style.display = 'none';
+  for (var ri = 0; ri < rules.length; ri++) {
+    (function(rule) {
+      var d = document.createElement('div');
+      d.className = 'rule' + (rule.enabled ? '' : ' off');
+      d.innerHTML =
+        '<label class="tw" style="width:32px;height:18px" title="Toggle">' +
+          '<input type="checkbox" class="rte"' + (rule.enabled ? ' checked' : '') + ' data-id="' + rule.id + '">' +
+          '<span class="sl"></span>' +
+        '</label>' +
+        '<div class="rb">' +
+          '<div class="rn">' + escH(rule.name || rule.urlPattern) + '</div>' +
+          '<div class="rt">' + mTag(rule.method) + sTag(rule.statusCode) +
+            (rule.delay ? '<span class="tx">⏱ ' + rule.delay + 'ms</span>' : '') +
+            (rule.isRegex ? '<span class="tx">regex</span>' : '') +
+          '</div>' +
+          '<div class="ru">' + escH(rule.urlPattern) + '</div>' +
+        '</div>' +
+        '<div class="rbtns">' +
+          '<button class="ib eb" data-id="' + rule.id + '" title="Edit">✏️</button>' +
+          '<button class="ib del db" data-id="' + rule.id + '" title="Delete">🗑️</button>' +
+        '</div>';
+      lst.appendChild(d);
+      d.querySelector('.rte').addEventListener('change', function(e) {
+        var r = rules.find(function(x) { return x.id === e.target.dataset.id; });
+        if (r) { r.enabled = e.target.checked; save(render); }
+      });
+      d.querySelector('.eb').addEventListener('click', function(e) { openM(e.currentTarget.dataset.id); });
+      d.querySelector('.db').addEventListener('click', function(e) {
+        if (confirm('Delete this rule?')) {
+          var id = e.currentTarget.dataset.id;
+          rules = rules.filter(function(r) { return r.id !== id; });
+          save(render);
+        }
+      });
+    })(rules[ri]);
+  }
+}
+
+function openM(id) {
+  editId = id || null;
+  var rule = id ? rules.find(function(r) { return r.id === id; }) : null;
+  $('mTtl').textContent = id ? 'Edit Mock Rule' : 'New Mock Rule';
+  $('fNm').value  = rule ? (rule.name || '') : '';
+  $('fMt').value  = rule ? rule.method : 'GET';
+  $('fSt').value  = rule ? rule.statusCode : 200;
+  $('fDl').value  = rule ? (rule.delay || 0) : 0;
+  $('fUrl').value = rule ? rule.urlPattern : '';
+  $('fRx').checked = rule ? !!rule.isRegex : false;
+  $('fBd').value  = rule ? (rule.responseBody || '') : '';
+  $('fHd').value  = rule ? (rule.responseHeaders || '{"Content-Type": "application/json"}') : '{"Content-Type": "application/json"}';
+  $('ov').classList.add('show');
+  setTimeout(function() { $('fUrl').focus(); }, 50);
+}
+function closeM() { $('ov').classList.remove('show'); editId = null; }
+function saveM() {
+  var url = $('fUrl').value.trim();
+  if (!url) { $('fUrl').focus(); return; }
+  var existing = editId ? rules.find(function(r) { return r.id === editId; }) : null;
+  var rule = {
+    id: editId || uid(),
+    enabled: existing ? existing.enabled : true,
+    name: $('fNm').value.trim(),
+    method: $('fMt').value,
+    statusCode: parseInt($('fSt').value) || 200,
+    delay: parseInt($('fDl').value) || 0,
+    urlPattern: url,
+    isRegex: $('fRx').checked,
+    responseBody: $('fBd').value,
+    responseHeaders: $('fHd').value.trim()
+  };
+  if (editId) {
+    var idx = -1;
+    for (var i = 0; i < rules.length; i++) if (rules[i].id === editId) { idx = i; break; }
+    if (idx >= 0) rules[idx] = rule; else rules.push(rule);
+  } else { rules.push(rule); }
+  save(render); closeM();
+}
+
+$('gt').addEventListener('change', function(e) { enabled = e.target.checked; save(render); });
+$('bAdd').addEventListener('click', function() { openM(); });
+$('mCn').addEventListener('click', closeM);
+$('mSv').addEventListener('click', saveM);
+$('ov').addEventListener('click', function(e) { if (e.target === $('ov')) closeM(); });
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeM();
+  if (e.key === 'Enter' && e.ctrlKey && $('ov').classList.contains('show')) saveM();
+});
+$('bEx').addEventListener('click', function() {
+  var a = document.createElement('a');
+  a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify({ rules: rules }, null, 2));
+  a.download = 'request-mocker-rules.json'; a.click();
+});
+$('bIm').addEventListener('click', function() {
+  var inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.json,application/json';
+  inp.onchange = function(e) {
+    var file = e.target.files[0]; if (!file) return;
+    var r = new FileReader();
+    r.onload = function(ev) {
+      try {
+        var d = JSON.parse(ev.target.result);
+        if (Array.isArray(d.rules)) { rules = rules.concat(d.rules); save(render); }
+      } catch(err) { alert('Invalid JSON file'); }
+    };
+    r.readAsText(file);
+  };
+  inp.click();
+});
+load(render);
+</script>
+</body>
+</html>
