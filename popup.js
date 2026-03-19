@@ -3,6 +3,7 @@
 var rules = [];
 var enabled = true;
 var editId = null;
+var currentDraft = null;   // loaded once at startup, kept in sync
 
 function $(id) { return document.getElementById(id); }
 function uid() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
@@ -16,74 +17,82 @@ function load(cb) {
   chrome.storage.local.get({ rules: [], enabled: true, formDraft: null }, function(d) {
     rules = d.rules;
     enabled = d.enabled;
-    if (cb) cb(d.formDraft);
+    currentDraft = d.formDraft;
+    if (cb) cb();
   });
 }
+
 function save(cb) {
   chrome.storage.local.set({ rules: rules, enabled: enabled }, cb);
 }
 
-// ── Draft persistence ──────────────────────────────────────────────────────
+// ── Draft ──────────────────────────────────────────────────────────────────
 function saveDraft() {
-  var draft = {
-    editId:   editId,
-    name:     $('fName').value,
-    method:   $('fMethod').value,
-    status:   $('fStatus').value,
-    delay:    $('fDelay').value,
-    url:      $('fUrl').value,
-    regex:    $('fRegex').checked,
-    body:     $('fBody').value,
-    headers:  $('fHeaders').value,
+  currentDraft = {
+    name:    $('fName').value,
+    method:  $('fMethod').value,
+    status:  $('fStatus').value,
+    delay:   $('fDelay').value,
+    url:     $('fUrl').value,
+    regex:   $('fRegex').checked,
+    body:    $('fBody').value,
+    headers: $('fHeaders').value,
   };
-  chrome.storage.local.set({ formDraft: draft });
+  chrome.storage.local.set({ formDraft: currentDraft });
 }
 
 function clearDraft() {
+  currentDraft = null;
   chrome.storage.local.remove('formDraft');
-}
-
-function attachDraftListeners() {
-  var ids = ['fName', 'fMethod', 'fStatus', 'fDelay', 'fUrl', 'fBody', 'fHeaders'];
-  ids.forEach(function(id) { $(id).addEventListener('input', saveDraft); });
-  $('fRegex').addEventListener('change', saveDraft);
-  $('fMethod').addEventListener('change', saveDraft);
 }
 
 // ── Views ──────────────────────────────────────────────────────────────────
 function showList() {
-  $('viewList').classList.remove('hidden');
   $('viewForm').classList.add('hidden');
+  $('viewList').classList.remove('hidden');
   clearDraft();
   editId = null;
 }
 
-function showForm(id, draft) {
+function showForm(id) {
   editId = id || null;
   var rule = id ? rules.find(function(r) { return r.id === id; }) : null;
-  var hasDraft = !id && draft && (draft.url || draft.body || draft.name);
+
+  // For a new rule, use saved draft if available
+  var draft = (!id && currentDraft) ? currentDraft : null;
+  var hasDraft = !!draft;
 
   $('formTitle').textContent = id ? 'Edit Mock Rule' : 'New Mock Rule';
+  $('draftBadge').classList.toggle('hidden', !hasDraft);
 
-  var badge = $('draftBadge');
   if (hasDraft) {
-    badge.classList.remove('hidden');
+    $('fName').value    = draft.name    || '';
+    $('fMethod').value  = draft.method  || 'GET';
+    $('fStatus').value  = draft.status  || 200;
+    $('fDelay').value   = draft.delay   || 0;
+    $('fUrl').value     = draft.url     || '';
+    $('fRegex').checked = !!draft.regex;
+    $('fBody').value    = draft.body    || '';
+    $('fHeaders').value = draft.headers || '{"Content-Type": "application/json"}';
+  } else if (rule) {
+    $('fName').value    = rule.name            || '';
+    $('fMethod').value  = rule.method          || 'GET';
+    $('fStatus').value  = rule.statusCode      || 200;
+    $('fDelay').value   = rule.delay           || 0;
+    $('fUrl').value     = rule.urlPattern      || '';
+    $('fRegex').checked = !!rule.isRegex;
+    $('fBody').value    = rule.responseBody    || '';
+    $('fHeaders').value = rule.responseHeaders || '{"Content-Type": "application/json"}';
   } else {
-    badge.classList.add('hidden');
+    $('fName').value    = '';
+    $('fMethod').value  = 'GET';
+    $('fStatus').value  = 200;
+    $('fDelay').value   = 0;
+    $('fUrl').value     = '';
+    $('fRegex').checked = false;
+    $('fBody').value    = '';
+    $('fHeaders').value = '{"Content-Type": "application/json"}';
   }
-
-  // Populate from draft, rule, or defaults
-  var src = hasDraft ? draft : rule;
-  $('fName').value    = src ? (hasDraft ? src.name    : (src.name || ''))          : '';
-  $('fMethod').value  = src ? (hasDraft ? src.method  : src.method)                : 'GET';
-  $('fStatus').value  = src ? (hasDraft ? src.status  : src.statusCode)            : 200;
-  $('fDelay').value   = src ? (hasDraft ? src.delay   : (src.delay || 0))          : 0;
-  $('fUrl').value     = src ? (hasDraft ? src.url     : src.urlPattern)            : '';
-  $('fRegex').checked = src ? (hasDraft ? src.regex   : !!src.isRegex)             : false;
-  $('fBody').value    = src ? (hasDraft ? src.body    : (src.responseBody || ''))  : '';
-  $('fHeaders').value = src
-    ? (hasDraft ? src.headers : (src.responseHeaders || '{"Content-Type": "application/json"}'))
-    : '{"Content-Type": "application/json"}';
 
   $('viewList').classList.add('hidden');
   $('viewForm').classList.remove('hidden');
@@ -95,6 +104,7 @@ function methodBadge(m) {
   var map = { GET:'m-GET', POST:'m-POST', PUT:'m-PUT', DELETE:'m-DELETE', PATCH:'m-PATCH', '*':'m-ANY' };
   return '<span class="badge ' + (map[m] || 'm-ANY') + '">' + (m === '*' ? 'ANY' : m) + '</span>';
 }
+
 function statusBadge(code) {
   var n = parseInt(code);
   var cls = n >= 500 ? 's-err' : n >= 400 ? 's-warn' : 's-ok';
@@ -143,7 +153,7 @@ function render() {
       if (r) { r.enabled = e.target.checked; save(render); }
     });
     el.querySelector('.edit-btn').addEventListener('click', function(e) {
-      showForm(e.currentTarget.dataset.id, null);
+      showForm(e.currentTarget.dataset.id);
     });
     el.querySelector('.del-btn').addEventListener('click', function(e) {
       if (confirm('Delete this rule?')) {
@@ -157,7 +167,7 @@ function render() {
   });
 }
 
-// ── Save ───────────────────────────────────────────────────────────────────
+// ── Save rule ──────────────────────────────────────────────────────────────
 function saveRule() {
   var urlPattern = $('fUrl').value.trim();
   if (!urlPattern) { $('fUrl').focus(); return; }
@@ -183,9 +193,8 @@ function saveRule() {
     rules.push(rule);
   }
 
-  clearDraft();
   save(render);
-  showList();
+  showList();        // also calls clearDraft()
 }
 
 // ── Events ─────────────────────────────────────────────────────────────────
@@ -193,25 +202,28 @@ $('globalToggle').addEventListener('change', function(e) {
   enabled = e.target.checked;
   save(render);
 });
-$('btnAdd').addEventListener('click', function() {
-  chrome.storage.local.get({ formDraft: null }, function(d) {
-    showForm(null, d.formDraft);
-  });
-});
+
+$('btnAdd').addEventListener('click', function() { showForm(null); });
 $('btnCancel').addEventListener('click', showList);
 $('btnSave').addEventListener('click', saveRule);
 
-attachDraftListeners();
+// Save draft on every keystroke / change
+['fName','fMethod','fStatus','fDelay','fUrl','fBody','fHeaders'].forEach(function(id) {
+  $(id).addEventListener('input', saveDraft);
+  $(id).addEventListener('change', saveDraft);
+});
+$('fRegex').addEventListener('change', saveDraft);
 
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') showList();
   if (e.key === 'Enter' && e.ctrlKey && !$('viewForm').classList.contains('hidden')) saveRule();
 });
 
-load(function(draft) {
+// ── Init ───────────────────────────────────────────────────────────────────
+load(function() {
   render();
-  // If there's a draft saved (e.g. popup was closed mid-edit), re-open the form
-  if (draft && (draft.url || draft.body || draft.name)) {
-    showForm(null, draft);
+  // Auto-restore the form if a draft was in progress
+  if (currentDraft && (currentDraft.url || currentDraft.body || currentDraft.name)) {
+    showForm(null);
   }
 });
