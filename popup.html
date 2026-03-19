@@ -205,7 +205,7 @@ select option { background: #181a2a; }
 </div>
 
 <!-- List view -->
-<div class="view" id="viewList">
+<div class="view" id="viewList" style="display:flex">
   <div class="list" id="ruleList">
     <div class="empty" id="empty">
       <div class="empty-icon">⚡</div>
@@ -219,11 +219,11 @@ select option { background: #181a2a; }
 </div>
 
 <!-- Form view -->
-<div class="view hidden" id="viewForm">
+<div class="view" id="viewForm" style="display:none">
   <div class="form-scroll">
     <div class="form-title" id="formTitle">
       New Mock Rule
-      <span class="draft-badge hidden" id="draftBadge">draft restored</span>
+      <span class="draft-badge" id="draftBadge" style="display:none">draft restored</span>
     </div>
 
     <div class="field">
