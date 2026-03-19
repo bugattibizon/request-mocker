@@ -1,90 +1,97 @@
-// interceptor.js — runs in MAIN world, intercepts fetch + XHR
+// Runs in the MAIN world — same JS context as the page.
+// Overrides fetch and XMLHttpRequest to return mocked responses.
 (() => {
   let state = { rules: [], enabled: true };
-  window.addEventListener('__RM_sync', e => { state = e.detail; });
 
-  function findRule(url, method) {
+  window.addEventListener('__RM_sync', (e) => {
+    state = e.detail;
+  });
+
+  // Returns the first matching enabled rule, or null.
+  function match(url, method) {
     if (!state.enabled) return null;
-    return state.rules.find(r => {
-      if (!r.enabled) return false;
-      if (r.method !== '*' && r.method.toUpperCase() !== method.toUpperCase()) return false;
+    return state.rules.find((rule) => {
+      if (!rule.enabled) return false;
+      if (rule.method !== '*' && rule.method.toUpperCase() !== method.toUpperCase()) return false;
       try {
-        return r.isRegex ? new RegExp(r.urlPattern).test(url) : url.includes(r.urlPattern);
-      } catch { return false; }
-    }) || null;
+        return rule.isRegex
+          ? new RegExp(rule.urlPattern).test(url)
+          : url.includes(rule.urlPattern);
+      } catch {
+        return false;
+      }
+    }) ?? null;
   }
 
-  async function buildResponse(rule) {
-    if (rule.delay) await new Promise(res => setTimeout(res, rule.delay));
-    let hdrs = { 'Content-Type': 'application/json' };
-    try { Object.assign(hdrs, JSON.parse(rule.responseHeaders || '{}')); } catch {}
-    return new Response(rule.responseBody || '', {
+  // Resolves after the rule's delay, then returns a mocked Response.
+  async function mockResponse(rule) {
+    if (rule.delay > 0) {
+      await new Promise((r) => setTimeout(r, rule.delay));
+    }
+    const headers = { 'Content-Type': 'application/json' };
+    try { Object.assign(headers, JSON.parse(rule.responseHeaders || '{}')); } catch {}
+    return new Response(rule.responseBody ?? '', {
       status: rule.statusCode || 200,
       statusText: 'Mocked',
-      headers: hdrs
+      headers,
     });
   }
 
-  // ── Fetch override ──────────────────────────────────────────────────────
+  // ── fetch ──────────────────────────────────────────────────────────────────
   const _fetch = window.fetch;
-  window.fetch = function(input, init) {
-    if (!init) init = {};
+  window.fetch = function (input, init = {}) {
     const url = input instanceof Request ? input.url : String(input);
-    const method = ((input instanceof Request ? input.method : init.method) || 'GET').toUpperCase();
-    const rule = findRule(url, method);
+    const method = (input instanceof Request ? input.method : init.method ?? 'GET').toUpperCase();
+    const rule = match(url, method);
     if (rule) {
-      console.debug('[RM] MOCK fetch ' + method + ' ' + url + ' => ' + rule.statusCode);
-      return buildResponse(rule);
+      console.debug(`[RM] mock fetch ${method} ${url} → ${rule.statusCode}`);
+      return mockResponse(rule);
     }
     return _fetch.apply(this, arguments);
   };
 
-  // ── XHR override ────────────────────────────────────────────────────────
+  // ── XMLHttpRequest ─────────────────────────────────────────────────────────
   const _XHR = window.XMLHttpRequest;
 
   function PatchedXHR() {
     const xhr = new _XHR();
-    let _m = 'GET', _u = '';
-    const oOpen = xhr.open.bind(xhr);
-    const oSend = xhr.send.bind(xhr);
+    let _method = 'GET', _url = '';
 
-    xhr.open = function(method, url, async, user, pass) {
-      _m = (method || 'GET').toUpperCase();
-      _u = url || '';
-      return oOpen(method, url, async, user, pass);
+    const origOpen = xhr.open.bind(xhr);
+    const origSend = xhr.send.bind(xhr);
+
+    xhr.open = function (method, url, ...rest) {
+      _method = (method || 'GET').toUpperCase();
+      _url = url || '';
+      return origOpen(method, url, ...rest);
     };
 
-    xhr.send = function(body) {
-      const rule = findRule(_u, _m);
-      if (rule) {
-        console.debug('[RM] MOCK XHR ' + _m + ' ' + _u + ' => ' + rule.statusCode);
-        setTimeout(function() {
+    xhr.send = function (body) {
+      const rule = match(_url, _method);
+      if (!rule) return origSend(body);
+
+      console.debug(`[RM] mock XHR ${_method} ${_url} → ${rule.statusCode}`);
+      setTimeout(() => {
+        const props = {
+          readyState:   4,
+          status:       rule.statusCode || 200,
+          statusText:   'Mocked',
+          responseText: rule.responseBody ?? '',
+          response:     rule.responseBody ?? '',
+        };
+        for (const [k, v] of Object.entries(props)) {
           try {
-            var vals = {
-              readyState: 4,
-              status: rule.statusCode || 200,
-              statusText: 'Mocked',
-              responseText: rule.responseBody || '',
-              response: rule.responseBody || ''
-            };
-            Object.keys(vals).forEach(function(p) {
-              Object.defineProperty(xhr, p, {
-                get: (function(v) { return function() { return v; }; })(vals[p]),
-                configurable: true
-              });
-            });
-          } catch(e) { console.warn('[RM] XHR property override failed:', e); }
-          xhr.dispatchEvent(new Event('readystatechange'));
-          xhr.dispatchEvent(new ProgressEvent('load', { loaded: 1, total: 1 }));
-          if (typeof xhr.onreadystatechange === 'function') xhr.onreadystatechange.call(xhr);
-          if (typeof xhr.onload === 'function') xhr.onload.call(xhr);
-        }, rule.delay || 0);
-        return;
-      }
-      return oSend(body);
+            Object.defineProperty(xhr, k, { get: () => v, configurable: true });
+          } catch {}
+        }
+        xhr.dispatchEvent(new Event('readystatechange'));
+        xhr.dispatchEvent(new ProgressEvent('load', { loaded: 1, total: 1 }));
+        if (typeof xhr.onreadystatechange === 'function') xhr.onreadystatechange.call(xhr);
+        if (typeof xhr.onload === 'function') xhr.onload.call(xhr);
+      }, rule.delay ?? 0);
     };
 
-    return xhr; // returning object from constructor uses it as the instance
+    return xhr;
   }
 
   PatchedXHR.prototype = _XHR.prototype;
