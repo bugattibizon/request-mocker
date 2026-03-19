@@ -6,15 +6,18 @@
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+html, body { height: 100%; }
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: #0f1117;
   color: #c9cde8;
   width: 420px;
-  max-height: 580px;
+  height: 580px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
 }
 
 /* ── Header ── */
@@ -149,7 +152,7 @@ body {
 /* ── Modal overlay ── */
 .overlay {
   display: none;
-  position: fixed; inset: 0;
+  position: absolute; inset: 0;
   background: rgba(0,0,0,.75);
   z-index: 100;
   overflow-y: auto;
@@ -226,8 +229,6 @@ select option { background: #181a2a; }
 </div>
 
 <div class="footer">
-  <button class="btn btn-ghost" id="btnExport">Export</button>
-  <button class="btn btn-ghost" id="btnImport">Import</button>
   <button class="btn btn-primary" id="btnAdd">+ Add Rule</button>
 </div>
 
@@ -448,39 +449,6 @@ $('overlay').addEventListener('click', (e) => { if (e.target === $('overlay')) c
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeModal();
   if (e.key === 'Enter' && e.ctrlKey && $('overlay').classList.contains('open')) saveModal();
-});
-
-$('btnExport').addEventListener('click', () => {
-  const a = document.createElement('a');
-  a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify({ rules }, null, 2));
-  a.download = 'request-mocker-rules.json';
-  a.click();
-});
-
-$('btnImport').addEventListener('click', () => {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = '.json,application/json';
-  input.onchange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const data = JSON.parse(ev.target.result);
-        if (Array.isArray(data.rules)) {
-          rules = rules.concat(data.rules);
-          save(render);
-        } else {
-          alert('Invalid file: expected { rules: [...] }');
-        }
-      } catch {
-        alert('Invalid JSON file');
-      }
-    };
-    reader.readAsText(file);
-  };
-  input.click();
 });
 
 load(render);
