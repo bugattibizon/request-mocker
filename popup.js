@@ -97,7 +97,7 @@ $('fMethodBtn').addEventListener('click', function(e) {
   $('fMethodDrop').classList.toggle('open');
 });
 document.querySelectorAll('.method-opt').forEach(function(opt) {
-  opt.addEventListener('click', function() { setMethod(opt.dataset.val); });
+  opt.addEventListener('click', function() { setMethod(opt.dataset.val); autoSave(); });
 });
 document.addEventListener('click', function(e) {
   if (!e.target.closest('#methodWrap')) $('fMethodDrop').classList.remove('open');
@@ -443,6 +443,14 @@ function applyImport(entry) {
   syncEditor('fReqBody', 'reqBodyHL', 'reqBodyNums');
   updateJSONStatus($('fBody').value,    $('jsonStatus'));
   updateJSONStatus($('fReqBody').value, $('jsonStatusReq'));
+  // Save immediately so the mock is active as soon as the popup opens.
+  // Switch to edit mode so subsequent auto-saves update this rule.
+  var rule = buildRule();
+  if (rule) {
+    editId = rule.id;
+    rules.push(rule);
+    save(function() {});
+  }
 }
 
 chrome.storage.onChanged.addListener(function(changes) {
