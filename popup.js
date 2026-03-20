@@ -575,11 +575,12 @@ function renderFormSearchHL() {
   overlay.scrollTop = target.scrollTop;
 }
 
-// Scroll textarea to vertically centre the current match (no focus change)
+// Scroll textarea to show the match by briefly placing the cursor there.
+// The browser handles word-wrap correctly; scroll position persists after focus returns.
 function scrollToFormMatch(ta, matchStart) {
-  var lineNum = (ta.value.slice(0, matchStart).match(/\n/g) || []).length;
-  var lineH   = parseFloat(getComputedStyle(ta).lineHeight) || 19.2;
-  ta.scrollTop = Math.max(0, (lineNum - Math.floor(ta.clientHeight / lineH / 2)) * lineH);
+  ta.focus();
+  ta.setSelectionRange(matchStart, matchStart);
+  $('formSearchInput').focus();
 }
 
 function openFormSearch() {
