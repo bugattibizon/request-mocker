@@ -17,66 +17,85 @@ function statusClass(code) {
   return code < 300 ? 's-ok' : code < 400 ? 's-warn' : 's-err';
 }
 
-function render() {
-  var list = document.getElementById('list');
-  var empty = document.getElementById('empty');
-  var count = document.getElementById('entryCount');
-
-  var filtered = filterText
-    ? entries.filter(function(e) { return e.url.toLowerCase().indexOf(filterText) !== -1; })
-    : entries;
-
-  count.textContent = filtered.length + ' / ' + entries.length;
-  empty.style.display = filtered.length ? 'none' : '';
-
-  list.querySelectorAll('.entry').forEach(function(r) { r.remove(); });
-
-  filtered.forEach(function(item, idx) {
-    var mc = BADGE[item.method] || 'm-ANY';
-    var sc = statusClass(item.statusCode);
-    var row = document.createElement('div');
-    row.className = 'entry';
-    row.innerHTML =
-      '<span class="badge ' + mc + '">' + esc(item.method) + '</span>' +
-      '<span class="status ' + sc + '">' + (item.statusCode || '—') + '</span>' +
-      '<span class="entry-url" title="' + esc(item.url) + '">' + esc(item.url) + '</span>' +
-      '<button type="button" class="btn-mock" data-idx="' + idx + '">Mock</button>';
-    row.querySelector('.btn-mock').addEventListener('click', function(e) {
-      var btn = e.currentTarget;
-      var entry = filtered[parseInt(btn.dataset.idx)];
-      chrome.storage.local.set({ pendingImport: entry }, function() {
-        if (chrome.action && chrome.action.openPopup) {
-          chrome.action.openPopup().catch(function() {});
-        }
-      });
-      btn.textContent = '✓ Sent';
-      btn.classList.add('done');
-      setTimeout(function() {
-        btn.textContent = 'Mock';
-        btn.classList.remove('done');
-      }, 1500);
-    });
-    list.appendChild(row);
-  });
+function matches(item) {
+  return !filterText || item.url.toLowerCase().indexOf(filterText) !== -1;
 }
 
-// Each new XHR/fetch captured by devtools.js arrives here
+function updateCount() {
+  var visible = document.getElementById('list').querySelectorAll('.entry').length;
+  document.getElementById('entryCount').textContent = visible + ' / ' + entries.length;
+}
+
+function createRow(item) {
+  var row = document.createElement('div');
+  row.className = 'entry';
+  row.innerHTML =
+    '<span class="badge ' + (BADGE[item.method] || 'm-ANY') + '">' + esc(item.method) + '</span>' +
+    '<span class="status ' + statusClass(item.statusCode) + '">' + (item.statusCode || '—') + '</span>' +
+    '<span class="entry-url" title="' + esc(item.url) + '">' + esc(item.url) + '</span>' +
+    '<button type="button" class="btn-mock">Mock</button>';
+  row.querySelector('.btn-mock').addEventListener('click', function(e) {
+    var btn = e.currentTarget;
+    chrome.storage.local.set({ pendingImport: item }, function() {
+      if (chrome.action && chrome.action.openPopup) {
+        chrome.action.openPopup().catch(function() {});
+      }
+    });
+    btn.textContent = '✓ Sent';
+    btn.classList.add('done');
+    setTimeout(function() { btn.textContent = 'Mock'; btn.classList.remove('done'); }, 1500);
+  });
+  return row;
+}
+
+// Full rebuild — used on filter change, clear, and navigation
+function renderAll() {
+  var list  = document.getElementById('list');
+  var empty = document.getElementById('empty');
+  list.querySelectorAll('.entry').forEach(function(r) { r.remove(); });
+  var filtered = entries.filter(matches);
+  empty.style.display = filtered.length ? 'none' : '';
+  if (!filtered.length) { updateCount(); return; }
+  var frag = document.createDocumentFragment();
+  filtered.forEach(function(item) { frag.appendChild(createRow(item)); });
+  list.appendChild(frag);
+  updateCount();
+}
+
+// Single prepend — used on each new entry (avoids full DOM rebuild)
+function prependEntry(item) {
+  if (!matches(item)) { updateCount(); return; }
+  var list = document.getElementById('list');
+  var rows = list.querySelectorAll('.entry');
+  var row  = createRow(item);
+  if (rows.length > 0) {
+    list.insertBefore(row, rows[0]);
+    if (rows.length >= MAX) rows[rows.length - 1].remove(); // trim oldest DOM row
+  } else {
+    list.appendChild(row);
+    document.getElementById('empty').style.display = 'none';
+  }
+  updateCount();
+}
+
+// New XHR/fetch captured by devtools.js
 chrome.storage.onChanged.addListener(function(changes) {
   if (changes.lastCapture && changes.lastCapture.newValue) {
-    entries.unshift(changes.lastCapture.newValue.item);
+    var item = changes.lastCapture.newValue.item;
+    entries.unshift(item);
     if (entries.length > MAX) entries.pop();
-    render();
+    prependEntry(item);
   }
 });
 
 document.getElementById('filterInput').addEventListener('input', function(e) {
   filterText = e.target.value.toLowerCase().trim();
-  render();
+  renderAll();
 });
 
 document.getElementById('btnClear').addEventListener('click', function() {
   entries = [];
-  render();
+  renderAll();
 });
 
 document.getElementById('preserveLog').addEventListener('change', function(e) {
@@ -84,18 +103,13 @@ document.getElementById('preserveLog').addEventListener('change', function(e) {
   chrome.storage.local.set({ panelPreserveLog: preserveLog });
 });
 
-// Clear on navigation unless preserve log is on
 chrome.devtools.network.onNavigated.addListener(function() {
-  if (!preserveLog) {
-    entries = [];
-    render();
-  }
+  if (!preserveLog) { entries = []; renderAll(); }
 });
 
-// Restore preserve log setting
 chrome.storage.local.get({ panelPreserveLog: false }, function(d) {
   preserveLog = d.panelPreserveLog;
   document.getElementById('preserveLog').checked = preserveLog;
 });
 
-render();
+renderAll();

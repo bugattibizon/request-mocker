@@ -1,6 +1,7 @@
 'use strict';
 
 var XHR_FETCH = { xhr: true, fetch: true };
+var BODY_LIMIT = 50 * 1024; // 50 KB — avoids slow serialisation on large responses
 
 chrome.devtools.network.onRequestFinished.addListener(function(harEntry) {
   if (!XHR_FETCH[harEntry._resourceType]) return;
@@ -18,16 +19,18 @@ chrome.devtools.network.onRequestFinished.addListener(function(harEntry) {
       body = content || '';
     }
 
+    if (body.length > BODY_LIMIT) {
+      body = body.slice(0, BODY_LIMIT) + '\n/* … truncated (' + Math.round(body.length / 1024) + ' KB total) */';
+    }
+
     var item = {
-      url:             req.url || '',
-      method:          (req.method || 'GET').toUpperCase(),
-      statusCode:      res.status || 0,
-      responseBody:    body,
-      responseHeaders: JSON.stringify(hdrs),
-      requestBody:     (req.postData && req.postData.text) || ''
+      url:          req.url || '',
+      method:       (req.method || 'GET').toUpperCase(),
+      statusCode:   res.status || 0,
+      responseBody: body,
+      requestBody:  (req.postData && req.postData.text) || ''
     };
 
-    // Write only the latest item — panel appends to its own local array
     chrome.storage.local.set({ lastCapture: { item: item, ts: Date.now() } });
   });
 });
