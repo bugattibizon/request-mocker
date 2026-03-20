@@ -189,8 +189,9 @@ function applyActiveTab() {
   var isHeaders = activeTab && activeTab.dataset.lt === 'headers';
   $('ruleList').style.display     = isHeaders ? 'none' : '';
   $('ihPanel').style.display      = isHeaders ? 'flex' : 'none';
-  $('btnAdd').style.display       = isHeaders ? 'none' : '';
-  $('btnAddHeader').style.display = isHeaders ? '' : 'none';
+  $('btnAdd').style.display        = isHeaders ? 'none' : '';
+  $('btnImportHar').style.display  = isHeaders ? 'none' : '';
+  $('btnAddHeader').style.display  = isHeaders ? '' : 'none';
   if (isHeaders) renderHeaders();
 }
 
@@ -199,6 +200,7 @@ function showList() {
   editId = null;
   $('viewForm').style.display   = 'none';
   $('viewEditor').style.display = 'none';
+  $('viewImport').style.display = 'none';
   $('viewList').style.display   = 'flex';
   applyActiveTab();
 }
@@ -260,14 +262,8 @@ function showForm(id) {
 function updateCount() {
   var activeRules = rules.filter(function(r) { return r.enabled; }).length;
   var activeIH    = injectHeaders.filter(function(h) { return h.enabled; }).length;
-  var parts = '';
-  if (rules.length) {
-    parts += '<span class="count-badge' + (activeRules ? '' : ' dim') + '">' + activeRules + '/' + rules.length + ' rules</span>';
-  }
-  if (injectHeaders.length) {
-    parts += '<span class="count-badge' + (activeIH ? '' : ' dim') + '">' + activeIH + '/' + injectHeaders.length + ' headers</span>';
-  }
-  $('count').innerHTML = parts;
+  $('countRules').textContent   = rules.length         ? activeRules + '/' + rules.length         : '';
+  $('countHeaders').textContent = injectHeaders.length  ? activeIH   + '/' + injectHeaders.length  : '';
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
@@ -445,6 +441,7 @@ document.querySelectorAll('.hdr-tab').forEach(function(btn) {
     btn.classList.add('active');
     $('viewForm').style.display   = 'none';
     $('viewEditor').style.display = 'none';
+    $('viewImport').style.display = 'none';
     $('viewList').style.display   = 'flex';
     applyActiveTab();
   });
@@ -452,6 +449,98 @@ document.querySelectorAll('.hdr-tab').forEach(function(btn) {
 
 $('btnCancel').addEventListener('click', showList);
 $('btnSave').addEventListener('click',   saveRule);
+
+// ── HAR import ────────────────────────────────────────────────────────────────
+function parseHar(text) {
+  var har = JSON.parse(text);
+  var entries = (har.log || har).entries || [];
+  return entries.map(function(e) {
+    var req = e.request || {};
+    var res = e.response || {};
+    var hdrs = {};
+    (res.headers || []).forEach(function(h) { hdrs[h.name] = h.value; });
+    return {
+      url:             req.url || '',
+      method:          (req.method || 'GET').toUpperCase(),
+      statusCode:      res.status || 200,
+      responseBody:    (res.content && res.content.text) || '',
+      responseHeaders: JSON.stringify(hdrs),
+      requestBody:     (req.postData && req.postData.text) || ''
+    };
+  });
+}
+
+function applyHarEntry(entry) {
+  $('viewImport').style.display = 'none';
+  showForm(null);
+  $('fUrl').value     = entry.url;
+  setMethod(entry.method);
+  $('fStatus').value  = entry.statusCode;
+  $('fBody').value    = entry.responseBody;
+  $('fReqBody').value = entry.requestBody;
+  responseHeaderRows  = parseResponseHeaders(entry.responseHeaders);
+  renderResponseHeaders();
+  syncEditor('fBody',    'bodyHL',    'bodyNums');
+  syncEditor('fReqBody', 'reqBodyHL', 'reqBodyNums');
+  updateJSONStatus($('fBody').value,    $('jsonStatus'));
+  updateJSONStatus($('fReqBody').value, $('jsonStatusReq'));
+}
+
+function showImportHar() {
+  $('viewList').style.display   = 'none';
+  $('viewImport').style.display = 'flex';
+  $('harPaste').style.display   = 'flex';
+  $('harPick').style.display    = 'none';
+  $('harInput').value = '';
+  $('harError').textContent = '';
+  setTimeout(function() { $('harInput').focus(); }, 50);
+}
+
+$('btnImportHar').addEventListener('click', showImportHar);
+
+$('btnHarCancel').addEventListener('click', function() {
+  $('viewImport').style.display = 'none';
+  $('viewList').style.display = 'flex';
+});
+
+$('btnHarImport').addEventListener('click', function() {
+  var text = $('harInput').value.trim();
+  if (!text) {
+    $('harError').textContent = 'Paste a HAR JSON first.';
+    $('harError').className = 'json-status json-err';
+    return;
+  }
+  var entries;
+  try { entries = parseHar(text); } catch(e) {
+    $('harError').textContent = 'Invalid HAR — could not parse JSON.';
+    $('harError').className = 'json-status json-err';
+    return;
+  }
+  if (!entries.length) {
+    $('harError').textContent = 'No network entries found in HAR.';
+    $('harError').className = 'json-status json-err';
+    return;
+  }
+  if (entries.length === 1) { applyHarEntry(entries[0]); return; }
+  // Multiple entries — show picker
+  $('harPaste').style.display = 'none';
+  $('harPick').style.display  = 'flex';
+  var list = $('harPickList');
+  list.innerHTML = '';
+  entries.forEach(function(entry) {
+    var mc = {GET:'m-GET',POST:'m-POST',PUT:'m-PUT',DELETE:'m-DELETE',PATCH:'m-PATCH'}[entry.method] || 'm-ANY';
+    var sc = entry.statusCode < 300 ? 's-ok' : entry.statusCode < 400 ? 's-warn' : 's-err';
+    var row = document.createElement('div');
+    row.className = 'rule';
+    row.style.cssText = 'cursor:pointer;padding:10px 12px;gap:10px';
+    row.innerHTML =
+      '<span class="badge ' + mc + '">' + entry.method + '</span>' +
+      '<span style="flex:1;min-width:0;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-dim)">' + esc(entry.url) + '</span>' +
+      '<span class="status ' + sc + '">' + entry.statusCode + '</span>';
+    row.addEventListener('click', function() { applyHarEntry(entry); });
+    list.appendChild(row);
+  });
+});
 
 ['fName','fMethod','fStatus','fDelay','fUrl'].forEach(function(id) {
   $(id).addEventListener('input',  saveDraft);
