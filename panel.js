@@ -2,7 +2,7 @@
 
 var MAX = 300;
 var entries = [];
-var filterText = '';
+var filterText = 'api.warmy.io';
 
 var BADGE = { GET:'m-GET', POST:'m-POST', PUT:'m-PUT', DELETE:'m-DELETE', PATCH:'m-PATCH' };
 
@@ -44,7 +44,8 @@ function render() {
       var btn = e.currentTarget;
       var entry = filtered[parseInt(btn.dataset.idx)];
       chrome.storage.local.set({ pendingImport: entry }, function() {
-        btn.textContent = '✓ Sent';
+        chrome.runtime.sendMessage({ type: 'openPopup' });
+        btn.textContent = '↗ Opening…';
         btn.classList.add('done');
         setTimeout(function() {
           btn.textContent = 'Mock';
