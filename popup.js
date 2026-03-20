@@ -454,7 +454,8 @@ function applyImport(entry) {
   $('fUrl').value = entry.url || '';
   setMethod(entry.method || 'GET');
   $('fStatus').value  = entry.statusCode || 200;
-  $('fBody').value    = entry.responseBody || '';
+  var rawBody = entry.responseBody || '';
+  $('fBody').value    = formatJSON(rawBody) || rawBody;
   $('fReqBody').value = entry.requestBody  || '';
   syncEditor('fBody',    'bodyHL',    'bodyNums');
   syncEditor('fReqBody', 'reqBodyHL', 'reqBodyNums');

@@ -44,11 +44,11 @@ function render() {
     row.querySelector('.btn-mock').addEventListener('click', function(e) {
       var btn = e.currentTarget;
       var entry = filtered[parseInt(btn.dataset.idx)];
-      chrome.storage.local.set({ pendingImport: entry });
-      // Call openPopup synchronously while user gesture is still active
-      if (chrome.action && chrome.action.openPopup) {
-        chrome.action.openPopup().catch(function() {});
-      }
+      chrome.storage.local.set({ pendingImport: entry }, function() {
+        if (chrome.action && chrome.action.openPopup) {
+          chrome.action.openPopup().catch(function() {});
+        }
+      });
       btn.textContent = '✓ Sent';
       btn.classList.add('done');
       setTimeout(function() {
