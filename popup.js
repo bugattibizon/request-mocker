@@ -542,6 +542,77 @@ $('btnEditorFormat').addEventListener('click', function() {
   updateJSONStatus($('fBodyEditor').value, $('jsonStatusEditor'));
 });
 
+// ── Ctrl+F search in inline form editors ──────────────────────────────────────
+var formSearchMatches = [], formSearchIdx = 0;
+
+function getFormSearchTarget() {
+  var activeBtn = document.querySelector('.tab-btn.active');
+  if (!activeBtn) return null;
+  if (activeBtn.dataset.tab === 'response') return $('fBody');
+  if (activeBtn.dataset.tab === 'request')  return $('fReqBody');
+  return null;
+}
+
+function openFormSearch() {
+  var target = getFormSearchTarget();
+  if (!target) return;
+  $('formSearch').classList.add('open');
+  $('formSearchInput').focus();
+  $('formSearchInput').select();
+  runFormSearch();
+}
+
+function closeFormSearch() {
+  $('formSearch').classList.remove('open');
+  $('formSearchCount').textContent = '';
+  formSearchMatches = [];
+  var target = getFormSearchTarget();
+  if (target) target.focus();
+}
+
+function runFormSearch() {
+  var q = $('formSearchInput').value;
+  formSearchMatches = [];
+  if (!q) { $('formSearchCount').textContent = ''; return; }
+  var target = getFormSearchTarget();
+  if (!target) return;
+  var text = target.value, lo = q.toLowerCase(), i = 0;
+  while (i <= text.length - q.length) {
+    var idx = text.toLowerCase().indexOf(lo, i);
+    if (idx === -1) break;
+    formSearchMatches.push(idx);
+    i = idx + 1;
+  }
+  formSearchIdx = 0;
+  jumpFormMatch(0);
+}
+
+function jumpFormMatch(delta) {
+  if (!formSearchMatches.length) { $('formSearchCount').textContent = '0 results'; return; }
+  formSearchIdx = ((formSearchIdx + delta) % formSearchMatches.length + formSearchMatches.length) % formSearchMatches.length;
+  var target = getFormSearchTarget();
+  if (!target) return;
+  var start = formSearchMatches[formSearchIdx];
+  var end = start + $('formSearchInput').value.length;
+  target.focus();
+  target.setSelectionRange(start, end);
+  var activeBtn = document.querySelector('.tab-btn.active');
+  if (activeBtn && activeBtn.dataset.tab === 'response') syncEditor('fBody',    'bodyHL',    'bodyNums');
+  if (activeBtn && activeBtn.dataset.tab === 'request')  syncEditor('fReqBody', 'reqBodyHL', 'reqBodyNums');
+  $('formSearchCount').textContent = (formSearchIdx + 1) + ' / ' + formSearchMatches.length;
+}
+
+$('btnSearchBody').addEventListener('click', openFormSearch);
+$('btnSearchReq').addEventListener('click',  openFormSearch);
+$('formSearchClose').addEventListener('click', closeFormSearch);
+$('formSearchPrev').addEventListener('click', function() { jumpFormMatch(-1); });
+$('formSearchNext').addEventListener('click', function() { jumpFormMatch(1); });
+$('formSearchInput').addEventListener('input', runFormSearch);
+$('formSearchInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') { e.shiftKey ? jumpFormMatch(-1) : jumpFormMatch(1); e.preventDefault(); }
+  if (e.key === 'Escape') closeFormSearch();
+});
+
 // ── Ctrl+F search in expand view ──────────────────────────────────────────────
 var searchMatches = [], searchIdx = 0;
 
@@ -597,14 +668,17 @@ document.querySelectorAll('.tab-btn').forEach(function(btn) {
     document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
     btn.classList.add('active');
     $('tab' + btn.dataset.tab.charAt(0).toUpperCase() + btn.dataset.tab.slice(1)).classList.add('active');
+    closeFormSearch();
   });
 });
 
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape' && $('editorSearch').classList.contains('open')) { closeSearch(); return; }
+  if (e.key === 'Escape' && $('formSearch').classList.contains('open')) { closeFormSearch(); return; }
   if (e.key === 'Escape') showList();
   if (e.key === 'Enter' && e.ctrlKey && $('viewForm').style.display !== 'none') $('btnBack').click();
   if (e.key === 'f' && e.ctrlKey && $('viewEditor').style.display !== 'none') { e.preventDefault(); openSearch(); }
+  if (e.key === 'f' && e.ctrlKey && $('viewForm').style.display !== 'none') { e.preventDefault(); openFormSearch(); }
 });
 
 load(function(pendingImport) {

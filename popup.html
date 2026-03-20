@@ -421,6 +421,7 @@ body.dark .jp { color:var(--text-sec); }
       <div class="tab-toolbar">
         <div class="json-status" id="jsonStatus"></div>
         <div style="display:flex;gap:6px">
+          <button type="button" class="btn-tool" id="btnSearchBody" title="Find (Ctrl+F)">⌕ Find</button>
           <button type="button" class="btn-tool" id="btnFormat">Format</button>
           <button type="button" class="btn-tool" id="btnCopyResp">Copy</button>
           <button type="button" class="btn-tool" id="btnExpand">↗ Expand</button>
@@ -440,6 +441,7 @@ body.dark .jp { color:var(--text-sec); }
       <div class="tab-toolbar">
         <div class="json-status" id="jsonStatusReq"></div>
         <div style="display:flex;gap:6px">
+          <button type="button" class="btn-tool" id="btnSearchReq" title="Find (Ctrl+F)">⌕ Find</button>
           <button type="button" class="btn-tool" id="btnFormatReq">Format</button>
           <button type="button" class="btn-tool" id="btnCopyReq">Copy</button>
           <button type="button" class="btn-tool" id="btnExpandReq">↗ Expand</button>
@@ -463,6 +465,14 @@ body.dark .jp { color:var(--text-sec); }
       <div class="rh-list" id="rhList"></div>
     </div>
 
+  </div>
+
+  <div class="search-bar" id="formSearch">
+    <input type="text" id="formSearchInput" placeholder="Find…" autocomplete="off">
+    <span class="search-count" id="formSearchCount"></span>
+    <button type="button" class="search-nav" id="formSearchPrev" title="Previous">↑</button>
+    <button type="button" class="search-nav" id="formSearchNext" title="Next">↓</button>
+    <button type="button" class="search-nav" id="formSearchClose" title="Close">✕</button>
   </div>
 
   <div class="footer">
