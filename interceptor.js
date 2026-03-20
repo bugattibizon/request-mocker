@@ -22,12 +22,24 @@
   }
 
   // Resolves after the rule's delay, then returns a mocked Response.
+  // Headers that must not be forwarded to a synthetic Response —
+  // the body is already decoded plaintext, so encoding/framing headers would corrupt it.
+  const STRIP_HEADERS = new Set([
+    'content-encoding', 'transfer-encoding', 'content-length',
+    'connection', 'keep-alive', 'upgrade',
+  ]);
+
   async function mockResponse(rule) {
     if (rule.delay > 0) {
       await new Promise((r) => setTimeout(r, rule.delay));
     }
     const headers = { 'Content-Type': 'application/json' };
-    try { Object.assign(headers, JSON.parse(rule.responseHeaders || '{}')); } catch {}
+    try {
+      const parsed = JSON.parse(rule.responseHeaders || '{}');
+      for (const [k, v] of Object.entries(parsed)) {
+        if (!STRIP_HEADERS.has(k.toLowerCase())) headers[k] = v;
+      }
+    } catch {}
     return new Response(rule.responseBody ?? '', {
       status: rule.statusCode || 200,
       statusText: 'Mocked',
