@@ -472,6 +472,7 @@ $('fBody').addEventListener('input', function() {
 });
 $('fBody').addEventListener('scroll', function() {
   syncEditor('fBody', 'bodyHL', 'bodyNums');
+  $('bodySearchHL').scrollTop = $('fBody').scrollTop;
 });
 
 // Request body editor
@@ -482,6 +483,7 @@ $('fReqBody').addEventListener('input', function() {
 });
 $('fReqBody').addEventListener('scroll', function() {
   syncEditor('fReqBody', 'reqBodyHL', 'reqBodyNums');
+  $('reqBodySearchHL').scrollTop = $('fReqBody').scrollTop;
 });
 $('btnFormatReq').addEventListener('click', function() {
   var f = formatJSON($('fReqBody').value);
@@ -553,28 +555,57 @@ function getFormSearchTarget() {
   return null;
 }
 
-function openFormSearch() {
+// Render transparent highlight overlay — all matches yellow, current match orange
+function renderFormSearchHL() {
   var target = getFormSearchTarget();
   if (!target) return;
+  var overlayId = target.id === 'fBody' ? 'bodySearchHL' : 'reqBodySearchHL';
+  var overlay = $(overlayId);
+  if (!overlay) return;
+  var q = $('formSearchInput').value;
+  if (!formSearchMatches.length || !q) { overlay.innerHTML = ''; return; }
+  var text = target.value, pos = 0, html = '';
+  formSearchMatches.forEach(function(start, i) {
+    html += esc(text.slice(pos, start));
+    html += '<span class="smatch' + (i === formSearchIdx ? ' cur' : '') + '">' + esc(text.slice(start, start + q.length)) + '</span>';
+    pos = start + q.length;
+  });
+  html += esc(text.slice(pos));
+  overlay.innerHTML = html + '\n';
+  overlay.scrollTop = target.scrollTop;
+}
+
+// Scroll textarea to vertically centre the current match (no focus change)
+function scrollToFormMatch(ta, matchStart) {
+  var lineNum = (ta.value.slice(0, matchStart).match(/\n/g) || []).length;
+  var lineH   = parseFloat(getComputedStyle(ta).lineHeight) || 19.2;
+  ta.scrollTop = Math.max(0, (lineNum - Math.floor(ta.clientHeight / lineH / 2)) * lineH);
+}
+
+function openFormSearch() {
+  if (!getFormSearchTarget()) return;
   $('formSearch').classList.add('open');
-  // Defer focus so the display:flex render completes first
+  // Defer so display:flex renders before focus()
   setTimeout(function() { $('formSearchInput').focus(); $('formSearchInput').select(); }, 0);
   runFormSearch();
 }
 
-function closeFormSearch() {
+function closeFormSearch(skipFocus) {
   $('formSearch').classList.remove('open');
   $('formSearchCount').textContent = '';
   formSearchMatches = [];
-  var target = getFormSearchTarget();
-  if (target) target.focus();
+  $('bodySearchHL').innerHTML    = '';
+  $('reqBodySearchHL').innerHTML = '';
+  if (!skipFocus) {
+    var t = getFormSearchTarget();
+    if (t) t.focus();
+  }
 }
 
 function runFormSearch() {
   var q = $('formSearchInput').value;
-  formSearchMatches = [];
-  formSearchIdx = 0;
-  if (!q) { $('formSearchCount').textContent = ''; return; }
+  formSearchMatches = []; formSearchIdx = 0;
+  if (!q) { $('formSearchCount').textContent = ''; renderFormSearchHL(); return; }
   var target = getFormSearchTarget();
   if (!target) return;
   var text = target.value, lo = q.toLowerCase(), i = 0;
@@ -584,35 +615,28 @@ function runFormSearch() {
     formSearchMatches.push(idx);
     i = idx + 1;
   }
-  // Update count only — do NOT focus the textarea while the user is typing
   $('formSearchCount').textContent = formSearchMatches.length ? '1 / ' + formSearchMatches.length : '0 results';
+  renderFormSearchHL();
 }
 
-// shouldFocus=true only when navigating via Enter/arrows, never when called from typing
-function jumpFormMatch(delta, shouldFocus) {
+// Navigate matches — scroll to match but never steal focus from search input
+function jumpFormMatch(delta) {
   if (!formSearchMatches.length) { $('formSearchCount').textContent = '0 results'; return; }
   formSearchIdx = ((formSearchIdx + delta) % formSearchMatches.length + formSearchMatches.length) % formSearchMatches.length;
   $('formSearchCount').textContent = (formSearchIdx + 1) + ' / ' + formSearchMatches.length;
-  if (!shouldFocus) return;
   var target = getFormSearchTarget();
-  if (!target) return;
-  var start = formSearchMatches[formSearchIdx];
-  var end   = start + $('formSearchInput').value.length;
-  target.focus();
-  target.setSelectionRange(start, end);
-  var activeBtn = document.querySelector('.tab-btn.active');
-  if (activeBtn && activeBtn.dataset.tab === 'response') syncEditor('fBody',    'bodyHL',    'bodyNums');
-  if (activeBtn && activeBtn.dataset.tab === 'request')  syncEditor('fReqBody', 'reqBodyHL', 'reqBodyNums');
+  if (target) scrollToFormMatch(target, formSearchMatches[formSearchIdx]);
+  renderFormSearchHL();
 }
 
 $('btnSearchBody').addEventListener('click', openFormSearch);
 $('btnSearchReq').addEventListener('click',  openFormSearch);
-$('formSearchClose').addEventListener('click', closeFormSearch);
-$('formSearchPrev').addEventListener('click', function() { jumpFormMatch(-1, true); });
-$('formSearchNext').addEventListener('click', function() { jumpFormMatch(1,  true); });
+$('formSearchClose').addEventListener('click', function() { closeFormSearch(); });
+$('formSearchPrev').addEventListener('click', function() { jumpFormMatch(-1); });
+$('formSearchNext').addEventListener('click', function() { jumpFormMatch(1); });
 $('formSearchInput').addEventListener('input', runFormSearch);
 $('formSearchInput').addEventListener('keydown', function(e) {
-  if (e.key === 'Enter') { e.shiftKey ? jumpFormMatch(-1, true) : jumpFormMatch(1, true); e.preventDefault(); }
+  if (e.key === 'Enter') { e.shiftKey ? jumpFormMatch(-1) : jumpFormMatch(1); e.preventDefault(); }
   if (e.key === 'Escape') closeFormSearch();
 });
 
@@ -671,7 +695,7 @@ document.querySelectorAll('.tab-btn').forEach(function(btn) {
     document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
     btn.classList.add('active');
     $('tab' + btn.dataset.tab.charAt(0).toUpperCase() + btn.dataset.tab.slice(1)).classList.add('active');
-    closeFormSearch();
+    closeFormSearch(true);
   });
 });
 
