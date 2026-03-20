@@ -117,6 +117,17 @@ function load(cb) {
 function save(cb) { chrome.storage.local.set({ rules: rules, enabled: enabled }, cb); }
 function saveHeaders() { chrome.storage.local.set({ injectHeaders: injectHeaders }); updateCount(); }
 
+function readPaginationConfig() {
+  return {
+    enabled:      $('fPagEnabled').checked,
+    totalPages:   parseInt($('fPagPages').value)       || 5,
+    pageParam:    $('fPagPageParam').value.trim()      || 'page',
+    perPageParam: $('fPagPerPageParam').value.trim()   || 'per_page',
+    itemsPath:    $('fPagItemsPath').value.trim(),
+    totalPath:    $('fPagTotalPath').value.trim(),
+  };
+}
+
 function buildRule() {
   var urlPattern = $('fUrl').value.trim();
   if (!urlPattern) return null;
@@ -133,6 +144,7 @@ function buildRule() {
     requestBody:     $('fReqBody').value,
     responseBody:    $('fBody').value,
     responseHeaders: responseHeadersToJSON(),
+    pagination:      readPaginationConfig(),
   };
 }
 
@@ -239,6 +251,16 @@ function showForm(id) {
     responseHeaderRows  = parseResponseHeaders('{"Content-Type":"application/json"}');
   }
 
+  // Pagination fields
+  var pg = (rule && rule.pagination) || {};
+  $('fPagEnabled').checked    = !!pg.enabled;
+  $('fPagPages').value        = pg.totalPages   || 5;
+  $('fPagPageParam').value    = pg.pageParam    || 'page';
+  $('fPagPerPageParam').value = pg.perPageParam || 'per_page';
+  $('fPagItemsPath').value    = pg.itemsPath    || '';
+  $('fPagTotalPath').value    = pg.totalPath    || '';
+  $('pagFields').style.display = pg.enabled ? '' : 'none';
+
   updateJSONStatus($('fBody').value, $('jsonStatus'));
   syncEditor('fBody', 'bodyHL', 'bodyNums');
   syncEditor('fReqBody', 'reqBodyHL', 'reqBodyNums');
@@ -291,6 +313,7 @@ function render() {
           methodBadge(rule.method) + statusBadge(rule.statusCode) +
           (rule.delay   ? '<span class="meta-text">⏱ ' + rule.delay + 'ms</span>' : '') +
           (rule.isRegex ? '<span class="meta-text">regex</span>' : '') +
+          (rule.pagination && rule.pagination.enabled ? '<span class="meta-text">⇌ ' + (rule.pagination.totalPages || '?') + ' pages</span>' : '') +
         '</div>' +
         '<div class="rule-url">' + esc(rule.urlPattern) + '</div>' +
       '</div>' +
@@ -462,6 +485,15 @@ chrome.storage.onChanged.addListener(function(changes) {
 ['fName','fMethod','fStatus','fDelay','fUrl'].forEach(function(id) {
   $(id).addEventListener('input',  autoSave);
   $(id).addEventListener('change', autoSave);
+});
+
+// Pagination field wiring
+$('fPagEnabled').addEventListener('change', function() {
+  $('pagFields').style.display = this.checked ? '' : 'none';
+  autoSave();
+});
+['fPagPages','fPagPageParam','fPagPerPageParam','fPagItemsPath','fPagTotalPath'].forEach(function(id) {
+  $(id).addEventListener('input', autoSave);
 });
 
 // Inline body editor

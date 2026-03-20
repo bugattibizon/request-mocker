@@ -416,6 +416,7 @@ body.dark .jp { color:var(--text-sec); }
     <button type="button" class="tab-btn active" data-tab="response">Response</button>
     <button type="button" class="tab-btn" data-tab="request">Request</button>
     <button type="button" class="tab-btn" data-tab="headers">Headers</button>
+    <button type="button" class="tab-btn" data-tab="pagination">Pagination</button>
   </div>
 
   <!-- Tab panels -->
@@ -470,6 +471,65 @@ body.dark .jp { color:var(--text-sec); }
         <button type="button" class="btn-tool" id="btnAddRH">+ Add</button>
       </div>
       <div class="rh-list" id="rhList"></div>
+    </div>
+
+    <!-- Pagination tab -->
+    <div class="tab-panel" id="tabPagination">
+      <div style="padding:14px 16px;overflow-y:auto;flex:1;min-height:0">
+
+        <div class="field">
+          <label class="checkbox-row">
+            <input type="checkbox" id="fPagEnabled">
+            <span style="font-weight:600">Enable pagination</span>
+          </label>
+          <div style="margin-top:4px;font-size:11px;color:var(--text-dim);line-height:1.5">
+            Every page request returns the same items from your response body.<br>
+            The total count is inflated so the UI renders real pagination controls.
+          </div>
+        </div>
+
+        <div id="pagFields" style="display:none;margin-top:14px">
+          <div class="row">
+            <div class="field">
+              <label class="label">Total pages</label>
+              <input type="number" id="fPagPages" value="5" min="1" max="9999">
+            </div>
+            <div class="field">
+              <label class="label">Page param</label>
+              <input type="text" id="fPagPageParam" placeholder="page">
+            </div>
+            <div class="field">
+              <label class="label">Per-page param</label>
+              <input type="text" id="fPagPerPageParam" placeholder="per_page">
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="field">
+              <label class="label" style="display:flex;gap:4px;align-items:baseline">
+                Items array path
+                <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;color:var(--text-dim)">auto if empty</span>
+              </label>
+              <input type="text" id="fPagItemsPath" placeholder="e.g.  data  or  results">
+            </div>
+            <div class="field">
+              <label class="label" style="display:flex;gap:4px;align-items:baseline">
+                Total count path
+                <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;color:var(--text-dim)">auto if empty</span>
+              </label>
+              <input type="text" id="fPagTotalPath" placeholder="e.g.  meta.total  or  total">
+            </div>
+          </div>
+
+          <div style="margin-top:10px;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--text-sec);line-height:1.7">
+            <strong style="color:var(--text-mid)">Example</strong><br>
+            Response body has <code style="font-family:monospace">{"data":[…10 items…],"meta":{"total":10}}</code><br>
+            Set <em>Total pages = 5</em> → interceptor returns <code style="font-family:monospace">meta.total = 50</code> on every page request,
+            so your UI shows 5 pages of the same 10 items.
+          </div>
+        </div>
+
+      </div>
     </div>
 
   </div>

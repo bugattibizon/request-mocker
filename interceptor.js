@@ -65,11 +65,66 @@
     }) ?? null;
   }
 
+  // ── Pagination helpers ─────────────────────────────────────────────────────
+  function getPath(obj, path) {
+    return path.split('.').reduce(function(o, k) { return o != null ? o[k] : undefined; }, obj);
+  }
+  function setPath(obj, path, val) {
+    var keys = path.split('.');
+    var o = obj;
+    for (var i = 0; i < keys.length - 1; i++) {
+      if (o[keys[i]] == null || typeof o[keys[i]] !== 'object') o[keys[i]] = {};
+      o = o[keys[i]];
+    }
+    o[keys[keys.length - 1]] = val;
+  }
+  function autoItemsPath(obj) {
+    for (var k in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, k) && Array.isArray(obj[k])) return k;
+    }
+    return null;
+  }
+  function autoTotalPath(obj) {
+    var names = ['total', 'count', 'total_count', 'totalCount', 'total_items', 'totalItems'];
+    for (var i = 0; i < names.length; i++) {
+      if (typeof obj[names[i]] === 'number') return names[i];
+    }
+    var nested = ['meta', 'pagination', 'page_info', 'paging'];
+    for (var j = 0; j < nested.length; j++) {
+      if (obj[nested[j]] && typeof obj[nested[j]] === 'object') {
+        for (var i = 0; i < names.length; i++) {
+          if (typeof obj[nested[j]][names[i]] === 'number') return nested[j] + '.' + names[i];
+        }
+      }
+    }
+    return null;
+  }
+  // Rewrites the total-count field so the UI sees N pages of data.
+  // Items array is returned unchanged (every page gets the same items).
+  function applyPagination(pg, bodyStr) {
+    try {
+      var data = JSON.parse(bodyStr);
+      if (typeof data !== 'object' || data === null || Array.isArray(data)) return bodyStr;
+      var itemsPath = pg.itemsPath || autoItemsPath(data);
+      if (!itemsPath) return bodyStr;
+      var items = getPath(data, itemsPath);
+      if (!Array.isArray(items)) return bodyStr;
+      var perPage    = items.length || 1;
+      var totalItems = (pg.totalPages || 1) * perPage;
+      var totalPath  = pg.totalPath || autoTotalPath(data);
+      if (totalPath) setPath(data, totalPath, totalItems);
+      return JSON.stringify(data);
+    } catch(e) { return bodyStr; }
+  }
+
   // ── Mock response ──────────────────────────────────────────────────────────
   async function mockResponse(rule) {
     if (rule.delay > 0) await new Promise(r => setTimeout(r, rule.delay));
+    var body = rule.pagination && rule.pagination.enabled
+      ? applyPagination(rule.pagination, rule.responseBody ?? '')
+      : (rule.responseBody ?? '');
     // _headers is pre-built — no JSON.parse here
-    return new Response(rule.responseBody ?? '', {
+    return new Response(body, {
       status:     rule.statusCode || 200,
       statusText: 'Mocked',
       headers:    rule._headers,
@@ -123,13 +178,17 @@
         return origSend(body);
       }
 
+      const mockBody = rule.pagination && rule.pagination.enabled
+        ? applyPagination(rule.pagination, rule.responseBody ?? '')
+        : (rule.responseBody ?? '');
+
       setTimeout(() => {
         const props = {
           readyState:   4,
           status:       rule.statusCode || 200,
           statusText:   'Mocked',
-          responseText: rule.responseBody ?? '',
-          response:     rule.responseBody ?? '',
+          responseText: mockBody,
+          response:     mockBody,
         };
         for (const [k, v] of Object.entries(props)) {
           try { Object.defineProperty(xhr, k, { get: () => v, configurable: true }); } catch {}
