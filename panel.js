@@ -12,6 +12,20 @@ function esc(s) {
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// Returns the request name as Chrome's Network tab does:
+// last non-empty path segment + query string, fallback to hostname.
+function requestName(url) {
+  try {
+    var u = new URL(url);
+    var parts = u.pathname.split('/').filter(Boolean);
+    var name = parts.length ? parts[parts.length - 1] : u.hostname;
+    return name + (u.search || '');
+  } catch(e) {
+    var i = url.lastIndexOf('/');
+    return i >= 0 ? (url.slice(i + 1) || url) : url;
+  }
+}
+
 function statusClass(code) {
   if (!code) return 's-neu';
   return code < 300 ? 's-ok' : code < 400 ? 's-warn' : 's-err';
@@ -33,7 +47,7 @@ function createRow(entry) {
   row.innerHTML =
     '<span class="badge ' + (BADGE[item.method] || 'm-ANY') + '">' + esc(item.method) + '</span>' +
     '<span class="status ' + statusClass(item.statusCode) + '">' + (item.statusCode || '—') + '</span>' +
-    '<span class="entry-url" title="' + esc(item.url) + '">' + esc(item.url) + '</span>' +
+    '<span class="entry-url" title="' + esc(item.url) + '">' + esc(requestName(item.url)) + '</span>' +
     '<button type="button" class="btn-mock">Mock</button>';
   row.querySelector('.btn-mock').addEventListener('click', function(e) {
     var btn = e.currentTarget;
