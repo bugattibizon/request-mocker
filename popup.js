@@ -10,7 +10,6 @@ function esc(s) {
 var rules = [];
 var enabled = true;
 var editId = null;
-var currentDraft = null;
 var injectHeaders = [];
 var responseHeaderRows = [];
 var darkTheme = false;
@@ -106,10 +105,9 @@ document.addEventListener('click', function(e) {
 
 // ── Storage ──────────────────────────────────────────────────────────────────
 function load(cb) {
-  chrome.storage.local.get({ rules: [], enabled: true, formDraft: null, injectHeaders: [], darkTheme: false, pendingImport: null }, function(d) {
+  chrome.storage.local.get({ rules: [], enabled: true, injectHeaders: [], darkTheme: false, pendingImport: null }, function(d) {
     rules         = d.rules;
     enabled       = d.enabled;
-    currentDraft  = d.formDraft;
     injectHeaders = d.injectHeaders;
     darkTheme     = d.darkTheme;
     applyTheme();
@@ -119,19 +117,32 @@ function load(cb) {
 function save(cb) { chrome.storage.local.set({ rules: rules, enabled: enabled }, cb); }
 function saveHeaders() { chrome.storage.local.set({ injectHeaders: injectHeaders }); updateCount(); }
 
-function saveDraft() {
-  currentDraft = {
-    name: $('fName').value, method: $('fMethod').value,
-    status: $('fStatus').value, delay: $('fDelay').value,
-    url: $('fUrl').value,
-    body: $('fBody').value, reqBody: $('fReqBody').value,
-    headers: JSON.stringify(responseHeaderRows),
+function buildRule() {
+  var urlPattern = $('fUrl').value.trim();
+  if (!urlPattern) return null;
+  var existing = editId ? rules.find(function(r) { return r.id === editId; }) : null;
+  return {
+    id:              editId || uid(),
+    enabled:         existing ? existing.enabled : true,
+    name:            $('fName').value.trim(),
+    method:          $('fMethod').value,
+    statusCode:      parseInt($('fStatus').value) || 200,
+    delay:           parseInt($('fDelay').value)  || 0,
+    urlPattern:      urlPattern,
+    isRegex:         false,
+    requestBody:     $('fReqBody').value,
+    responseBody:    $('fBody').value,
+    responseHeaders: responseHeadersToJSON(),
   };
-  chrome.storage.local.set({ formDraft: currentDraft });
 }
-function clearDraft() {
-  currentDraft = null;
-  chrome.storage.local.remove('formDraft');
+
+function autoSave() {
+  if (!editId) return; // new rules are saved on Back
+  var rule = buildRule();
+  if (!rule) return;
+  var idx = rules.findIndex(function(r) { return r.id === editId; });
+  if (idx >= 0) rules[idx] = rule;
+  save(function() {});
 }
 
 // ── Response header rows ──────────────────────────────────────────────────────
@@ -168,16 +179,16 @@ function renderResponseHeaders() {
       '<button type="button" class="icon-btn danger rh-del" data-id="' + h.id + '" title="Delete">' + delSVG + '</button>';
     row.querySelector('.rh-name').addEventListener('input', function(e) {
       var item = responseHeaderRows.find(function(x) { return x.id === e.target.dataset.id; });
-      if (item) { item.name = e.target.value; saveDraft(); }
+      if (item) { item.name = e.target.value; autoSave(); }
     });
     row.querySelector('.rh-val').addEventListener('input', function(e) {
       var item = responseHeaderRows.find(function(x) { return x.id === e.target.dataset.id; });
-      if (item) { item.value = e.target.value; saveDraft(); }
+      if (item) { item.value = e.target.value; autoSave(); }
     });
     row.querySelector('.rh-del').addEventListener('click', function(e) {
       var id = e.currentTarget.dataset.id;
       responseHeaderRows = responseHeaderRows.filter(function(x) { return x.id !== id; });
-      renderResponseHeaders(); saveDraft();
+      renderResponseHeaders(); autoSave();
     });
     list.appendChild(row);
   });
@@ -195,7 +206,6 @@ function applyActiveTab() {
 }
 
 function showList() {
-  clearDraft();
   editId = null;
   $('viewForm').style.display   = 'none';
   $('viewEditor').style.display = 'none';
@@ -205,23 +215,11 @@ function showList() {
 
 function showForm(id) {
   editId = id || null;
-  var rule  = id ? rules.find(function(r) { return r.id === id; }) : null;
-  var draft = (!id && currentDraft) ? currentDraft : null;
+  var rule = id ? rules.find(function(r) { return r.id === id; }) : null;
 
-  $('formTitle').textContent    = id ? 'Edit Mock Rule' : 'New Mock Rule';
-  $('draftBadge').style.display = draft ? 'inline-block' : 'none';
+  $('formTitle').textContent = id ? 'Edit Mock Rule' : 'New Mock Rule';
 
-  if (draft) {
-    $('fName').value   = draft.name   || '';
-    setMethod(draft.method || 'GET');
-    $('fStatus').value = draft.status || 200;
-    $('fDelay').value  = draft.delay  || 0;
-    $('fUrl').value    = draft.url    || '';
-    $('fBody').value   = draft.body   || '';
-    $('fReqBody').value = draft.reqBody || '';
-    try { responseHeaderRows = JSON.parse(draft.headers || '[]'); } catch(e) { responseHeaderRows = []; }
-    if (!responseHeaderRows.length) responseHeaderRows = parseResponseHeaders('{"Content-Type":"application/json"}');
-  } else if (rule) {
+  if (rule) {
     $('fName').value    = rule.name          || '';
     setMethod(rule.method || 'GET');
     $('fStatus').value  = rule.statusCode    || 200;
@@ -322,33 +320,6 @@ function render() {
   });
 }
 
-// ── Save rule ─────────────────────────────────────────────────────────────────
-function saveRule() {
-  var urlPattern = $('fUrl').value.trim();
-  if (!urlPattern) return;
-  var existing = editId ? rules.find(function(r) { return r.id === editId; }) : null;
-  var rule = {
-    id:              editId || uid(),
-    enabled:         existing ? existing.enabled : true,
-    name:            $('fName').value.trim(),
-    method:          $('fMethod').value,
-    statusCode:      parseInt($('fStatus').value) || 200,
-    delay:           parseInt($('fDelay').value)  || 0,
-    urlPattern:      urlPattern,
-    isRegex:         false,
-    requestBody:     $('fReqBody').value,
-    responseBody:    $('fBody').value,
-    responseHeaders: responseHeadersToJSON(),
-  };
-  if (editId) {
-    var idx = rules.findIndex(function(r) { return r.id === editId; });
-    if (idx >= 0) rules[idx] = rule; else rules.push(rule);
-  } else {
-    rules.push(rule);
-  }
-  save(render);
-  showList();
-}
 
 // ── Inject headers ────────────────────────────────────────────────────────────
 function renderHeaders() {
@@ -411,7 +382,7 @@ $('btnAddHeader').addEventListener('click', function() {
 });
 $('btnAddRH').addEventListener('click', function() {
   responseHeaderRows.push({ id: uid(), name: '', value: '' });
-  renderResponseHeaders(); saveDraft();
+  renderResponseHeaders(); autoSave();
 });
 
 $('btnCopyResp').addEventListener('click', function() { copyText($('fBody').value, this); });
@@ -444,8 +415,19 @@ document.querySelectorAll('.hdr-tab').forEach(function(btn) {
   });
 });
 
-$('btnCancel').addEventListener('click', showList);
-$('btnSave').addEventListener('click',   saveRule);
+$('btnBack').addEventListener('click', function() {
+  if (!editId) {
+    // New rule: save if URL is filled, otherwise discard
+    var rule = buildRule();
+    if (rule) {
+      rules.push(rule);
+      save(render);
+    }
+  } else {
+    render();
+  }
+  showList();
+});
 
 // ── Import from DevTools panel ────────────────────────────────────────────────
 function applyImport(entry) {
@@ -470,15 +452,15 @@ chrome.storage.onChanged.addListener(function(changes) {
 });
 
 ['fName','fMethod','fStatus','fDelay','fUrl'].forEach(function(id) {
-  $(id).addEventListener('input',  saveDraft);
-  $(id).addEventListener('change', saveDraft);
+  $(id).addEventListener('input',  autoSave);
+  $(id).addEventListener('change', autoSave);
 });
 
 // Inline body editor
 $('fBody').addEventListener('input', function() {
   syncEditor('fBody', 'bodyHL', 'bodyNums');
   updateJSONStatus($('fBody').value, $('jsonStatus'));
-  saveDraft();
+  autoSave();
 });
 $('fBody').addEventListener('scroll', function() {
   syncEditor('fBody', 'bodyHL', 'bodyNums');
@@ -488,7 +470,7 @@ $('fBody').addEventListener('scroll', function() {
 $('fReqBody').addEventListener('input', function() {
   syncEditor('fReqBody', 'reqBodyHL', 'reqBodyNums');
   updateJSONStatus($('fReqBody').value, $('jsonStatusReq'));
-  saveDraft();
+  autoSave();
 });
 $('fReqBody').addEventListener('scroll', function() {
   syncEditor('fReqBody', 'reqBodyHL', 'reqBodyNums');
@@ -539,7 +521,7 @@ $('btnEditorBack').addEventListener('click', function() {
     syncEditor('fBody', 'bodyHL', 'bodyNums');
     updateJSONStatus($('fBody').value, $('jsonStatus'));
   }
-  saveDraft();
+  autoSave();
   $('viewEditor').style.display = 'none';
   $('viewForm').style.display = 'flex';
 });
@@ -613,7 +595,7 @@ document.querySelectorAll('.tab-btn').forEach(function(btn) {
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape' && $('editorSearch').classList.contains('open')) { closeSearch(); return; }
   if (e.key === 'Escape') showList();
-  if (e.key === 'Enter' && e.ctrlKey && $('viewForm').style.display !== 'none') saveRule();
+  if (e.key === 'Enter' && e.ctrlKey && $('viewForm').style.display !== 'none') $('btnBack').click();
   if (e.key === 'f' && e.ctrlKey && $('viewEditor').style.display !== 'none') { e.preventDefault(); openSearch(); }
 });
 
@@ -622,7 +604,5 @@ load(function(pendingImport) {
   applyActiveTab();
   if (pendingImport) {
     applyImport(pendingImport);
-  } else if (currentDraft && (currentDraft.url || currentDraft.body || currentDraft.name)) {
-    showForm(null);
   }
 });
