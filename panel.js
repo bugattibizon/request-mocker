@@ -56,16 +56,11 @@ function render() {
   });
 }
 
-// Load existing captures on panel open
-chrome.storage.local.get({ capturedRequests: [] }, function(d) {
-  entries = d.capturedRequests || [];
-  render();
-});
-
-// Live updates as devtools.js writes new captures
+// Each new XHR/fetch captured by devtools.js arrives here
 chrome.storage.onChanged.addListener(function(changes) {
-  if (changes.capturedRequests) {
-    entries = changes.capturedRequests.newValue || [];
+  if (changes.lastCapture && changes.lastCapture.newValue) {
+    entries.unshift(changes.lastCapture.newValue.item);
+    if (entries.length > MAX) entries.pop();
     render();
   }
 });
@@ -75,6 +70,10 @@ document.getElementById('filterInput').addEventListener('input', function(e) {
   render();
 });
 
+// Clear resets the local list only — no storage write needed
 document.getElementById('btnClear').addEventListener('click', function() {
-  chrome.storage.local.set({ capturedRequests: [] });
+  entries = [];
+  render();
 });
+
+render();

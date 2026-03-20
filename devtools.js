@@ -1,8 +1,10 @@
 'use strict';
 
-var captured = [];
+var XHR_FETCH = { xhr: true, fetch: true };
 
 chrome.devtools.network.onRequestFinished.addListener(function(harEntry) {
+  if (!XHR_FETCH[harEntry._resourceType]) return;
+
   harEntry.getContent(function(content, encoding) {
     var req = harEntry.request || {};
     var res = harEntry.response || {};
@@ -25,18 +27,9 @@ chrome.devtools.network.onRequestFinished.addListener(function(harEntry) {
       requestBody:     (req.postData && req.postData.text) || ''
     };
 
-    captured.unshift(item);
-    if (captured.length > 300) captured.pop();
-    chrome.storage.local.set({ capturedRequests: captured });
+    // Write only the latest item — panel appends to its own local array
+    chrome.storage.local.set({ lastCapture: { item: item, ts: Date.now() } });
   });
-});
-
-// Sync clear: if panel clears storage, reset our in-memory array too
-chrome.storage.onChanged.addListener(function(changes) {
-  if (changes.capturedRequests && changes.capturedRequests.newValue &&
-      changes.capturedRequests.newValue.length === 0) {
-    captured = [];
-  }
 });
 
 chrome.devtools.panels.create('Request Mocker', 'icon16.png', 'panel.html');
