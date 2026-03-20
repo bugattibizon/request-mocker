@@ -456,8 +456,6 @@ function applyImport(entry) {
   $('fStatus').value  = entry.statusCode || 200;
   $('fBody').value    = entry.responseBody || '';
   $('fReqBody').value = entry.requestBody  || '';
-  responseHeaderRows  = parseResponseHeaders(entry.responseHeaders);
-  renderResponseHeaders();
   syncEditor('fBody',    'bodyHL',    'bodyNums');
   syncEditor('fReqBody', 'reqBodyHL', 'reqBodyNums');
   updateJSONStatus($('fBody').value,    $('jsonStatus'));
