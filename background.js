@@ -30,9 +30,3 @@ chrome.storage.onChanged.addListener(() => {
   chrome.storage.local.get({ rules: [], enabled: true, injectHeaders: [] }, updateBadge);
 });
 
-// Open popup when the DevTools panel Mock button is clicked.
-chrome.runtime.onMessage.addListener((msg) => {
-  if (msg.type === 'openPopup' && chrome.action.openPopup) {
-    chrome.action.openPopup().catch(() => {});
-  }
-});

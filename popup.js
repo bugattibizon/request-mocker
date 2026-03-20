@@ -451,9 +451,7 @@ $('btnSave').addEventListener('click',   saveRule);
 function applyImport(entry) {
   chrome.storage.local.remove('pendingImport');
   showForm(null);
-  var importUrl = entry.url || '';
-  try { var _u = new URL(importUrl); importUrl = _u.origin + _u.pathname; } catch(e) {}
-  $('fUrl').value = importUrl;
+  $('fUrl').value = entry.url || '';
   setMethod(entry.method || 'GET');
   $('fStatus').value  = entry.statusCode || 200;
   $('fBody').value    = entry.responseBody || '';
