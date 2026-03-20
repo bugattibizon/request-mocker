@@ -557,8 +557,8 @@ function openFormSearch() {
   var target = getFormSearchTarget();
   if (!target) return;
   $('formSearch').classList.add('open');
-  $('formSearchInput').focus();
-  $('formSearchInput').select();
+  // Defer focus so the display:flex render completes first
+  setTimeout(function() { $('formSearchInput').focus(); $('formSearchInput').select(); }, 0);
   runFormSearch();
 }
 
@@ -573,6 +573,7 @@ function closeFormSearch() {
 function runFormSearch() {
   var q = $('formSearchInput').value;
   formSearchMatches = [];
+  formSearchIdx = 0;
   if (!q) { $('formSearchCount').textContent = ''; return; }
   var target = getFormSearchTarget();
   if (!target) return;
@@ -583,33 +584,35 @@ function runFormSearch() {
     formSearchMatches.push(idx);
     i = idx + 1;
   }
-  formSearchIdx = 0;
-  jumpFormMatch(0);
+  // Update count only — do NOT focus the textarea while the user is typing
+  $('formSearchCount').textContent = formSearchMatches.length ? '1 / ' + formSearchMatches.length : '0 results';
 }
 
-function jumpFormMatch(delta) {
+// shouldFocus=true only when navigating via Enter/arrows, never when called from typing
+function jumpFormMatch(delta, shouldFocus) {
   if (!formSearchMatches.length) { $('formSearchCount').textContent = '0 results'; return; }
   formSearchIdx = ((formSearchIdx + delta) % formSearchMatches.length + formSearchMatches.length) % formSearchMatches.length;
+  $('formSearchCount').textContent = (formSearchIdx + 1) + ' / ' + formSearchMatches.length;
+  if (!shouldFocus) return;
   var target = getFormSearchTarget();
   if (!target) return;
   var start = formSearchMatches[formSearchIdx];
-  var end = start + $('formSearchInput').value.length;
+  var end   = start + $('formSearchInput').value.length;
   target.focus();
   target.setSelectionRange(start, end);
   var activeBtn = document.querySelector('.tab-btn.active');
   if (activeBtn && activeBtn.dataset.tab === 'response') syncEditor('fBody',    'bodyHL',    'bodyNums');
   if (activeBtn && activeBtn.dataset.tab === 'request')  syncEditor('fReqBody', 'reqBodyHL', 'reqBodyNums');
-  $('formSearchCount').textContent = (formSearchIdx + 1) + ' / ' + formSearchMatches.length;
 }
 
 $('btnSearchBody').addEventListener('click', openFormSearch);
 $('btnSearchReq').addEventListener('click',  openFormSearch);
 $('formSearchClose').addEventListener('click', closeFormSearch);
-$('formSearchPrev').addEventListener('click', function() { jumpFormMatch(-1); });
-$('formSearchNext').addEventListener('click', function() { jumpFormMatch(1); });
+$('formSearchPrev').addEventListener('click', function() { jumpFormMatch(-1, true); });
+$('formSearchNext').addEventListener('click', function() { jumpFormMatch(1,  true); });
 $('formSearchInput').addEventListener('input', runFormSearch);
 $('formSearchInput').addEventListener('keydown', function(e) {
-  if (e.key === 'Enter') { e.shiftKey ? jumpFormMatch(-1) : jumpFormMatch(1); e.preventDefault(); }
+  if (e.key === 'Enter') { e.shiftKey ? jumpFormMatch(-1, true) : jumpFormMatch(1, true); e.preventDefault(); }
   if (e.key === 'Escape') closeFormSearch();
 });
 
