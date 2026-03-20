@@ -119,12 +119,10 @@ function saveHeaders() { chrome.storage.local.set({ injectHeaders: injectHeaders
 
 function readPaginationConfig() {
   return {
-    enabled:      $('fPagEnabled').checked,
-    totalPages:   parseInt($('fPagPages').value)       || 5,
-    pageParam:    $('fPagPageParam').value.trim()      || 'page',
-    perPageParam: $('fPagPerPageParam').value.trim()   || 'per_page',
-    itemsPath:    $('fPagItemsPath').value.trim(),
-    totalPath:    $('fPagTotalPath').value.trim(),
+    enabled:    $('fPagEnabled').checked,
+    totalPages: parseInt($('fPagPages').value) || 5,
+    pageParam:  $('fPagPageParam').value.trim() || 'page',
+    pagPath:    $('fPagPath').value.trim(),
   };
 }
 
@@ -253,12 +251,10 @@ function showForm(id) {
 
   // Pagination fields
   var pg = (rule && rule.pagination) || {};
-  $('fPagEnabled').checked    = !!pg.enabled;
-  $('fPagPages').value        = pg.totalPages   || 5;
-  $('fPagPageParam').value    = pg.pageParam    || 'page';
-  $('fPagPerPageParam').value = pg.perPageParam || 'per_page';
-  $('fPagItemsPath').value    = pg.itemsPath    || '';
-  $('fPagTotalPath').value    = pg.totalPath    || '';
+  $('fPagEnabled').checked   = !!pg.enabled;
+  $('fPagPages').value       = pg.totalPages || 5;
+  $('fPagPageParam').value   = pg.pageParam  || 'page';
+  $('fPagPath').value        = pg.pagPath    || '';
   $('pagFields').style.display = pg.enabled ? '' : 'none';
 
   updateJSONStatus($('fBody').value, $('jsonStatus'));
@@ -492,7 +488,7 @@ $('fPagEnabled').addEventListener('change', function() {
   $('pagFields').style.display = this.checked ? '' : 'none';
   autoSave();
 });
-['fPagPages','fPagPageParam','fPagPerPageParam','fPagItemsPath','fPagTotalPath'].forEach(function(id) {
+['fPagPages','fPagPageParam','fPagPath'].forEach(function(id) {
   $(id).addEventListener('input', autoSave);
 });
 
