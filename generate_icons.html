@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Generate Icons</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 32px; background: #f5f5f5; color: #1a1a1a; }
+  h2 { margin-bottom: 8px; }
+  p { color: #6b6b6b; margin-bottom: 24px; }
+  #status { font-weight: 600; color: #1090D4; }
+  .done { color: #00875a !important; }
+  canvas { display: none; }
+</style>
+</head>
+<body>
+<h2>Request Mocker — Icon Generator</h2>
+<p>Open this file in Chrome. Icons will download automatically — place them in the extension folder, then reload the extension.</p>
+<div id="status">Generating icons…</div>
+<canvas id="c"></canvas>
+<script>
+const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <ellipse cx="64" cy="82" rx="36" ry="42" fill="#1e3252"/>
+  <circle cx="64" cy="42" r="30" fill="#1e3252"/>
+  <ellipse cx="64" cy="88" rx="22" ry="33" fill="#f5f5f5"/>
+  <ellipse cx="64" cy="44" rx="16" ry="18" fill="#f5f5f5"/>
+  <circle cx="56.5" cy="36" r="5.5" fill="#1e3252"/>
+  <circle cx="71.5" cy="36" r="5.5" fill="#1e3252"/>
+  <circle cx="58" cy="34.5" r="1.8" fill="white"/>
+  <circle cx="73" cy="34.5" r="1.8" fill="white"/>
+  <path d="M58.5,48 L69.5,48 L64,56.5 Z" fill="#f5a623"/>
+  <ellipse cx="24" cy="80" rx="12" ry="28" fill="#1e3252" transform="rotate(-10 24 80)"/>
+  <ellipse cx="104" cy="80" rx="12" ry="28" fill="#1e3252" transform="rotate(10 104 80)"/>
+  <ellipse cx="50" cy="120" rx="15" ry="7" fill="#f5a623"/>
+  <ellipse cx="78" cy="120" rx="15" ry="7" fill="#f5a623"/>
+</svg>`;
+
+const canvas = document.getElementById('c');
+const sizes = [16, 32, 48, 128];
+let done = 0;
+
+function generateNext(i) {
+  if (i >= sizes.length) return;
+  const size = sizes[i];
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const img = new Image();
+  const blob = new Blob([svg], { type: 'image/svg+xml' });
+  const url = URL.createObjectURL(blob);
+  img.onload = () => {
+    ctx.clearRect(0, 0, size, size);
+    ctx.drawImage(img, 0, 0, size, size);
+    URL.revokeObjectURL(url);
+    canvas.toBlob(pngBlob => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(pngBlob);
+      a.download = `icon${size}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      done++;
+      if (done === sizes.length) {
+        document.getElementById('status').textContent = '✓ Done! icon16.png, icon32.png, icon48.png, icon128.png downloaded.';
+        document.getElementById('status').className = 'done';
+      }
+      setTimeout(() => generateNext(i + 1), 300);
+    }, 'image/png');
+  };
+  img.src = url;
+}
+
+generateNext(0);
+</script>
+</body>
+</html>
