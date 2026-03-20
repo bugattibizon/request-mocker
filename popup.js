@@ -452,7 +452,12 @@ $('btnBack').addEventListener('click', function() {
 function applyImport(entry) {
   chrome.storage.local.remove('pendingImport');
   showForm(null);
-  $('fUrl').value = entry.url || '';
+  var importUrl = entry.url || '';
+  try {
+    var u = new URL(importUrl);
+    importUrl = u.origin + u.pathname;   // strip ?query and #hash — pattern should match all pages
+  } catch(e) {}
+  $('fUrl').value = importUrl;
   setMethod(entry.method || 'GET');
   $('fStatus').value  = entry.statusCode || 200;
   var rawBody = entry.responseBody || '';
