@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Body -->
+  <ellipse cx="64" cy="82" rx="36" ry="42" fill="#1e3252"/>
+  <!-- Head -->
+  <circle cx="64" cy="42" r="30" fill="#1e3252"/>
+  <!-- White belly -->
+  <ellipse cx="64" cy="88" rx="22" ry="33" fill="#f5f5f5"/>
+  <!-- White face -->
+  <ellipse cx="64" cy="44" rx="16" ry="18" fill="#f5f5f5"/>
+  <!-- Left eye -->
+  <circle cx="56.5" cy="36" r="5.5" fill="#1e3252"/>
+  <!-- Right eye -->
+  <circle cx="71.5" cy="36" r="5.5" fill="#1e3252"/>
+  <!-- Eye glints -->
+  <circle cx="58" cy="34.5" r="1.8" fill="white"/>
+  <circle cx="73" cy="34.5" r="1.8" fill="white"/>
+  <!-- Beak -->
+  <path d="M58.5,48 L69.5,48 L64,56.5 Z" fill="#f5a623"/>
+  <!-- Left wing -->
+  <ellipse cx="24" cy="80" rx="12" ry="28" fill="#1e3252" transform="rotate(-10 24 80)"/>
+  <!-- Right wing -->
+  <ellipse cx="104" cy="80" rx="12" ry="28" fill="#1e3252" transform="rotate(10 104 80)"/>
+  <!-- Left foot -->
+  <ellipse cx="50" cy="120" rx="15" ry="7" fill="#f5a623"/>
+  <!-- Right foot -->
+  <ellipse cx="78" cy="120" rx="15" ry="7" fill="#f5a623"/>
+</svg>

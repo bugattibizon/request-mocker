@@ -8,18 +8,16 @@
   });
 
   // Returns the first matching enabled rule, or null.
-  function match(url, method) {
+  function match(url, method, body) {
     if (!state.enabled) return null;
     return state.rules.find((rule) => {
       if (!rule.enabled) return false;
       if (rule.method !== '*' && rule.method.toUpperCase() !== method.toUpperCase()) return false;
-      try {
-        return rule.isRegex
-          ? new RegExp(rule.urlPattern).test(url)
-          : url.includes(rule.urlPattern);
-      } catch {
-        return false;
+      if (!url.includes(rule.urlPattern)) return false;
+      if (rule.requestBody && rule.requestBody.trim()) {
+        if (!String(body || '').includes(rule.requestBody.trim())) return false;
       }
+      return true;
     }) ?? null;
   }
 
@@ -40,14 +38,22 @@
   // ── fetch ──────────────────────────────────────────────────────────────────
   const _fetch = window.fetch;
   window.fetch = function (input, init = {}) {
-    const url = input instanceof Request ? input.url : String(input);
+    const url    = input instanceof Request ? input.url : String(input);
     const method = (input instanceof Request ? input.method : init.method ?? 'GET').toUpperCase();
-    const rule = match(url, method);
+    const body   = typeof init.body === 'string' ? init.body
+                 : (init.body instanceof URLSearchParams ? init.body.toString() : '');
+    const rule = match(url, method, body);
     if (rule) {
       console.debug(`[RM] mock fetch ${method} ${url} → ${rule.statusCode}`);
       return mockResponse(rule);
     }
-    return _fetch.apply(this, arguments);
+    const ih = (state.injectHeaders || []).filter(h => h.enabled && h.name);
+    if (ih.length) {
+      const headers = new Headers(init.headers || {});
+      ih.forEach(h => headers.set(h.name, h.value));
+      init = { ...init, headers };
+    }
+    return _fetch.call(this, input, init);
   };
 
   // ── XMLHttpRequest ─────────────────────────────────────────────────────────
@@ -67,8 +73,15 @@
     };
 
     xhr.send = function (body) {
-      const rule = match(_url, _method);
-      if (!rule) return origSend(body);
+      const rule = match(_url, _method, typeof body === 'string' ? body : '');
+      if (!rule) {
+        (state.injectHeaders || []).forEach(h => {
+          if (h.enabled && h.name) {
+            try { xhr.setRequestHeader(h.name, h.value); } catch {}
+          }
+        });
+        return origSend(body);
+      }
 
       console.debug(`[RM] mock XHR ${_method} ${_url} → ${rule.statusCode}`);
       setTimeout(() => {
