@@ -416,6 +416,7 @@ body.dark .jp { color:var(--text-sec); }
     <button type="button" class="tab-btn active" data-tab="response">Response</button>
     <button type="button" class="tab-btn" data-tab="request">Request</button>
     <button type="button" class="tab-btn" data-tab="headers">Headers</button>
+    <button type="button" class="tab-btn" data-tab="pagination">Pagination</button>
   </div>
 
   <!-- Tab panels -->
@@ -470,6 +471,55 @@ body.dark .jp { color:var(--text-sec); }
         <button type="button" class="btn-tool" id="btnAddRH">+ Add</button>
       </div>
       <div class="rh-list" id="rhList"></div>
+    </div>
+
+    <!-- Pagination tab -->
+    <div class="tab-panel" id="tabPagination">
+      <div style="padding:14px 16px;overflow-y:auto;flex:1;min-height:0">
+
+        <div class="field">
+          <label class="checkbox-row">
+            <input type="checkbox" id="fPagEnabled">
+            <span style="font-weight:600">Enable pagination</span>
+          </label>
+          <div style="margin-top:4px;font-size:11px;color:var(--text-dim);line-height:1.5">
+            Every page request returns the same items from your response body.<br>
+            The total count is inflated so the UI renders real pagination controls.
+          </div>
+        </div>
+
+        <div id="pagFields" style="display:none;margin-top:14px">
+          <div class="row">
+            <div class="field">
+              <label class="label">Total pages</label>
+              <input type="number" id="fPagPages" value="5" min="1" max="9999">
+            </div>
+            <div class="field">
+              <label class="label">Page param</label>
+              <input type="text" id="fPagPageParam" placeholder="page">
+            </div>
+            <div class="field">
+              <label class="label" style="display:flex;gap:4px;align-items:baseline">
+                Pagination path
+                <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;color:var(--text-dim)">auto if empty</span>
+              </label>
+              <input type="text" id="fPagPath" placeholder="e.g.  pagination  or  meta">
+            </div>
+          </div>
+
+          <div style="margin-top:10px;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--text-sec);line-height:1.7">
+            <strong style="color:var(--text-mid)">How it works</strong><br>
+            The interceptor reads the page number from <code style="font-family:monospace">?page=N</code> in the URL,
+            then updates every pagination field it finds in the response:
+            <code style="font-family:monospace">current_page</code>, <code style="font-family:monospace">total_pages</code>,
+            <code style="font-family:monospace">total_count</code>, <code style="font-family:monospace">prev_page</code>,
+            <code style="font-family:monospace">next_page</code>, <code style="font-family:monospace">first_page?</code>,
+            <code style="font-family:monospace">last_page?</code>, <code style="font-family:monospace">offset_value</code>.<br>
+            <span style="color:var(--text-dim)">Leave path empty to auto-detect the pagination object. Items array is returned unchanged on every page.</span>
+          </div>
+        </div>
+
+      </div>
     </div>
 
   </div>

@@ -30,3 +30,15 @@ chrome.storage.onChanged.addListener(() => {
   chrome.storage.local.get({ rules: [], enabled: true, injectHeaders: [] }, updateBadge);
 });
 
+// Signal the DevTools panel to clear when the inspected tab navigates.
+// chrome.devtools.network.onNavigated is unreliable in devtools pages;
+// chrome.tabs.onUpdated fires reliably from the background with no extra permissions.
+chrome.tabs.onUpdated.addListener(function(tabId, changeInfo) {
+  if (changeInfo.status !== 'loading') return;
+  chrome.storage.local.get({ devtoolsTabId: -1 }, function(d) {
+    if (d.devtoolsTabId === tabId) {
+      chrome.storage.local.set({ panelNavigated: Date.now() });
+    }
+  });
+});
+

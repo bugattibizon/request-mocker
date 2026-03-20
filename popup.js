@@ -117,6 +117,15 @@ function load(cb) {
 function save(cb) { chrome.storage.local.set({ rules: rules, enabled: enabled }, cb); }
 function saveHeaders() { chrome.storage.local.set({ injectHeaders: injectHeaders }); updateCount(); }
 
+function readPaginationConfig() {
+  return {
+    enabled:    $('fPagEnabled').checked,
+    totalPages: parseInt($('fPagPages').value) || 5,
+    pageParam:  $('fPagPageParam').value.trim() || 'page',
+    pagPath:    $('fPagPath').value.trim(),
+  };
+}
+
 function buildRule() {
   var urlPattern = $('fUrl').value.trim();
   if (!urlPattern) return null;
@@ -133,6 +142,7 @@ function buildRule() {
     requestBody:     $('fReqBody').value,
     responseBody:    $('fBody').value,
     responseHeaders: responseHeadersToJSON(),
+    pagination:      readPaginationConfig(),
   };
 }
 
@@ -239,6 +249,14 @@ function showForm(id) {
     responseHeaderRows  = parseResponseHeaders('{"Content-Type":"application/json"}');
   }
 
+  // Pagination fields
+  var pg = (rule && rule.pagination) || {};
+  $('fPagEnabled').checked   = !!pg.enabled;
+  $('fPagPages').value       = pg.totalPages || 5;
+  $('fPagPageParam').value   = pg.pageParam  || 'page';
+  $('fPagPath').value        = pg.pagPath    || '';
+  $('pagFields').style.display = pg.enabled ? '' : 'none';
+
   updateJSONStatus($('fBody').value, $('jsonStatus'));
   syncEditor('fBody', 'bodyHL', 'bodyNums');
   syncEditor('fReqBody', 'reqBodyHL', 'reqBodyNums');
@@ -291,6 +309,7 @@ function render() {
           methodBadge(rule.method) + statusBadge(rule.statusCode) +
           (rule.delay   ? '<span class="meta-text">⏱ ' + rule.delay + 'ms</span>' : '') +
           (rule.isRegex ? '<span class="meta-text">regex</span>' : '') +
+          (rule.pagination && rule.pagination.enabled ? '<span class="meta-text">⇌ ' + (rule.pagination.totalPages || '?') + ' pages</span>' : '') +
         '</div>' +
         '<div class="rule-url">' + esc(rule.urlPattern) + '</div>' +
       '</div>' +
@@ -433,7 +452,12 @@ $('btnBack').addEventListener('click', function() {
 function applyImport(entry) {
   chrome.storage.local.remove('pendingImport');
   showForm(null);
-  $('fUrl').value = entry.url || '';
+  var importUrl = entry.url || '';
+  try {
+    var u = new URL(importUrl);
+    importUrl = u.origin + u.pathname;   // strip ?query and #hash — pattern should match all pages
+  } catch(e) {}
+  $('fUrl').value = importUrl;
   setMethod(entry.method || 'GET');
   $('fStatus').value  = entry.statusCode || 200;
   var rawBody = entry.responseBody || '';
@@ -462,6 +486,15 @@ chrome.storage.onChanged.addListener(function(changes) {
 ['fName','fMethod','fStatus','fDelay','fUrl'].forEach(function(id) {
   $(id).addEventListener('input',  autoSave);
   $(id).addEventListener('change', autoSave);
+});
+
+// Pagination field wiring
+$('fPagEnabled').addEventListener('change', function() {
+  $('pagFields').style.display = this.checked ? '' : 'none';
+  autoSave();
+});
+['fPagPages','fPagPageParam','fPagPath'].forEach(function(id) {
+  $(id).addEventListener('input', autoSave);
 });
 
 // Inline body editor
