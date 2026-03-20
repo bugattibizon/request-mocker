@@ -56,4 +56,8 @@ function capture(req, res, body) {
   chrome.storage.local.set({ lastCapture: { item: item, ts: Date.now() } });
 }
 
+chrome.devtools.network.onNavigated.addListener(function() {
+  chrome.storage.local.set({ panelNavigated: Date.now() });
+});
+
 chrome.devtools.panels.create('Request Mocker', 'icon16.png', 'panel.html');

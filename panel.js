@@ -86,6 +86,10 @@ chrome.storage.onChanged.addListener(function(changes) {
     if (entries.length > MAX) entries.pop();
     prependEntry(item);
   }
+  if (changes.panelNavigated && !preserveLog) {
+    entries = [];
+    renderAll();
+  }
 });
 
 document.getElementById('filterInput').addEventListener('input', function(e) {
@@ -103,9 +107,9 @@ document.getElementById('preserveLog').addEventListener('change', function(e) {
   chrome.storage.local.set({ panelPreserveLog: preserveLog });
 });
 
-chrome.devtools.network.onNavigated.addListener(function() {
-  if (!preserveLog) { entries = []; renderAll(); }
-});
+// onNavigated is signalled via storage from devtools.js (same reason
+// onRequestFinished was moved there — devtools APIs don't fire in panel pages)
+
 
 chrome.storage.local.get({ panelPreserveLog: false }, function(d) {
   preserveLog = d.panelPreserveLog;
