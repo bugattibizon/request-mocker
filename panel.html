@@ -67,6 +67,18 @@ body {
   text-align: right;
 }
 
+.preserve-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-sec);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+.preserve-label input { cursor: pointer; }
+
 .btn-clear {
   height: 28px;
   padding: 0 12px;
@@ -157,6 +169,10 @@ body {
 <div class="toolbar">
   <input type="text" class="filter-input" id="filterInput" value="api.warmy.io" placeholder="Filter by URL…" autocomplete="off">
   <span class="entry-count" id="entryCount"></span>
+  <label class="preserve-label">
+    <input type="checkbox" id="preserveLog">
+    Preserve log
+  </label>
   <button type="button" class="btn-clear" id="btnClear">Clear</button>
 </div>
 

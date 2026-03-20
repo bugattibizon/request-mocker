@@ -3,6 +3,7 @@
 var MAX = 300;
 var entries = [];
 var filterText = 'api.warmy.io';
+var preserveLog = false;
 
 var BADGE = { GET:'m-GET', POST:'m-POST', PUT:'m-PUT', DELETE:'m-DELETE', PATCH:'m-PATCH' };
 
@@ -73,10 +74,28 @@ document.getElementById('filterInput').addEventListener('input', function(e) {
   render();
 });
 
-// Clear resets the local list only — no storage write needed
 document.getElementById('btnClear').addEventListener('click', function() {
   entries = [];
   render();
+});
+
+document.getElementById('preserveLog').addEventListener('change', function(e) {
+  preserveLog = e.target.checked;
+  chrome.storage.local.set({ panelPreserveLog: preserveLog });
+});
+
+// Clear on navigation unless preserve log is on
+chrome.devtools.network.onNavigated.addListener(function() {
+  if (!preserveLog) {
+    entries = [];
+    render();
+  }
+});
+
+// Restore preserve log setting
+chrome.storage.local.get({ panelPreserveLog: false }, function(d) {
+  preserveLog = d.panelPreserveLog;
+  document.getElementById('preserveLog').checked = preserveLog;
 });
 
 render();
