@@ -10,7 +10,6 @@ function esc(s) {
 var rules = [];
 var enabled = true;
 var editId = null;
-var currentDraft = null;
 var injectHeaders = [];
 var responseHeaderRows = [];
 var darkTheme = false;
@@ -98,7 +97,7 @@ $('fMethodBtn').addEventListener('click', function(e) {
   $('fMethodDrop').classList.toggle('open');
 });
 document.querySelectorAll('.method-opt').forEach(function(opt) {
-  opt.addEventListener('click', function() { setMethod(opt.dataset.val); });
+  opt.addEventListener('click', function() { setMethod(opt.dataset.val); autoSave(); });
 });
 document.addEventListener('click', function(e) {
   if (!e.target.closest('#methodWrap')) $('fMethodDrop').classList.remove('open');
@@ -106,32 +105,44 @@ document.addEventListener('click', function(e) {
 
 // ── Storage ──────────────────────────────────────────────────────────────────
 function load(cb) {
-  chrome.storage.local.get({ rules: [], enabled: true, formDraft: null, injectHeaders: [], darkTheme: false }, function(d) {
+  chrome.storage.local.get({ rules: [], enabled: true, injectHeaders: [], darkTheme: false, pendingImport: null }, function(d) {
     rules         = d.rules;
     enabled       = d.enabled;
-    currentDraft  = d.formDraft;
     injectHeaders = d.injectHeaders;
     darkTheme     = d.darkTheme;
     applyTheme();
-    if (cb) cb();
+    if (cb) cb(d.pendingImport);
   });
 }
 function save(cb) { chrome.storage.local.set({ rules: rules, enabled: enabled }, cb); }
 function saveHeaders() { chrome.storage.local.set({ injectHeaders: injectHeaders }); updateCount(); }
 
-function saveDraft() {
-  currentDraft = {
-    name: $('fName').value, method: $('fMethod').value,
-    status: $('fStatus').value, delay: $('fDelay').value,
-    url: $('fUrl').value,
-    body: $('fBody').value, reqBody: $('fReqBody').value,
-    headers: JSON.stringify(responseHeaderRows),
+function buildRule() {
+  var urlPattern = $('fUrl').value.trim();
+  if (!urlPattern) return null;
+  var existing = editId ? rules.find(function(r) { return r.id === editId; }) : null;
+  return {
+    id:              editId || uid(),
+    enabled:         existing ? existing.enabled : true,
+    name:            $('fName').value.trim(),
+    method:          $('fMethod').value,
+    statusCode:      parseInt($('fStatus').value) || 200,
+    delay:           parseInt($('fDelay').value)  || 0,
+    urlPattern:      urlPattern,
+    isRegex:         false,
+    requestBody:     $('fReqBody').value,
+    responseBody:    $('fBody').value,
+    responseHeaders: responseHeadersToJSON(),
   };
-  chrome.storage.local.set({ formDraft: currentDraft });
 }
-function clearDraft() {
-  currentDraft = null;
-  chrome.storage.local.remove('formDraft');
+
+function autoSave() {
+  if (!editId) return; // new rules are saved on Back
+  var rule = buildRule();
+  if (!rule) return;
+  var idx = rules.findIndex(function(r) { return r.id === editId; });
+  if (idx >= 0) rules[idx] = rule;
+  save(function() {});
 }
 
 // ── Response header rows ──────────────────────────────────────────────────────
@@ -168,16 +179,16 @@ function renderResponseHeaders() {
       '<button type="button" class="icon-btn danger rh-del" data-id="' + h.id + '" title="Delete">' + delSVG + '</button>';
     row.querySelector('.rh-name').addEventListener('input', function(e) {
       var item = responseHeaderRows.find(function(x) { return x.id === e.target.dataset.id; });
-      if (item) { item.name = e.target.value; saveDraft(); }
+      if (item) { item.name = e.target.value; autoSave(); }
     });
     row.querySelector('.rh-val').addEventListener('input', function(e) {
       var item = responseHeaderRows.find(function(x) { return x.id === e.target.dataset.id; });
-      if (item) { item.value = e.target.value; saveDraft(); }
+      if (item) { item.value = e.target.value; autoSave(); }
     });
     row.querySelector('.rh-del').addEventListener('click', function(e) {
       var id = e.currentTarget.dataset.id;
       responseHeaderRows = responseHeaderRows.filter(function(x) { return x.id !== id; });
-      renderResponseHeaders(); saveDraft();
+      renderResponseHeaders(); autoSave();
     });
     list.appendChild(row);
   });
@@ -189,13 +200,12 @@ function applyActiveTab() {
   var isHeaders = activeTab && activeTab.dataset.lt === 'headers';
   $('ruleList').style.display     = isHeaders ? 'none' : '';
   $('ihPanel').style.display      = isHeaders ? 'flex' : 'none';
-  $('btnAdd').style.display       = isHeaders ? 'none' : '';
-  $('btnAddHeader').style.display = isHeaders ? '' : 'none';
+  $('btnAdd').style.display        = isHeaders ? 'none' : '';
+  $('btnAddHeader').style.display  = isHeaders ? '' : 'none';
   if (isHeaders) renderHeaders();
 }
 
 function showList() {
-  clearDraft();
   editId = null;
   $('viewForm').style.display   = 'none';
   $('viewEditor').style.display = 'none';
@@ -205,23 +215,11 @@ function showList() {
 
 function showForm(id) {
   editId = id || null;
-  var rule  = id ? rules.find(function(r) { return r.id === id; }) : null;
-  var draft = (!id && currentDraft) ? currentDraft : null;
+  var rule = id ? rules.find(function(r) { return r.id === id; }) : null;
 
-  $('formTitle').textContent    = id ? 'Edit Mock Rule' : 'New Mock Rule';
-  $('draftBadge').style.display = draft ? 'inline-block' : 'none';
+  $('formTitle').textContent = id ? 'Edit Mock Rule' : 'New Mock Rule';
 
-  if (draft) {
-    $('fName').value   = draft.name   || '';
-    setMethod(draft.method || 'GET');
-    $('fStatus').value = draft.status || 200;
-    $('fDelay').value  = draft.delay  || 0;
-    $('fUrl').value    = draft.url    || '';
-    $('fBody').value   = draft.body   || '';
-    $('fReqBody').value = draft.reqBody || '';
-    try { responseHeaderRows = JSON.parse(draft.headers || '[]'); } catch(e) { responseHeaderRows = []; }
-    if (!responseHeaderRows.length) responseHeaderRows = parseResponseHeaders('{"Content-Type":"application/json"}');
-  } else if (rule) {
+  if (rule) {
     $('fName').value    = rule.name          || '';
     setMethod(rule.method || 'GET');
     $('fStatus').value  = rule.statusCode    || 200;
@@ -260,14 +258,8 @@ function showForm(id) {
 function updateCount() {
   var activeRules = rules.filter(function(r) { return r.enabled; }).length;
   var activeIH    = injectHeaders.filter(function(h) { return h.enabled; }).length;
-  var parts = '';
-  if (rules.length) {
-    parts += '<span class="count-badge' + (activeRules ? '' : ' dim') + '">' + activeRules + '/' + rules.length + ' rules</span>';
-  }
-  if (injectHeaders.length) {
-    parts += '<span class="count-badge' + (activeIH ? '' : ' dim') + '">' + activeIH + '/' + injectHeaders.length + ' headers</span>';
-  }
-  $('count').innerHTML = parts;
+  $('countRules').textContent   = rules.length         ? activeRules + '/' + rules.length         : '';
+  $('countHeaders').textContent = injectHeaders.length  ? activeIH   + '/' + injectHeaders.length  : '';
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
@@ -328,33 +320,6 @@ function render() {
   });
 }
 
-// ── Save rule ─────────────────────────────────────────────────────────────────
-function saveRule() {
-  var urlPattern = $('fUrl').value.trim();
-  if (!urlPattern) return;
-  var existing = editId ? rules.find(function(r) { return r.id === editId; }) : null;
-  var rule = {
-    id:              editId || uid(),
-    enabled:         existing ? existing.enabled : true,
-    name:            $('fName').value.trim(),
-    method:          $('fMethod').value,
-    statusCode:      parseInt($('fStatus').value) || 200,
-    delay:           parseInt($('fDelay').value)  || 0,
-    urlPattern:      urlPattern,
-    isRegex:         false,
-    requestBody:     $('fReqBody').value,
-    responseBody:    $('fBody').value,
-    responseHeaders: responseHeadersToJSON(),
-  };
-  if (editId) {
-    var idx = rules.findIndex(function(r) { return r.id === editId; });
-    if (idx >= 0) rules[idx] = rule; else rules.push(rule);
-  } else {
-    rules.push(rule);
-  }
-  save(render);
-  showList();
-}
 
 // ── Inject headers ────────────────────────────────────────────────────────────
 function renderHeaders() {
@@ -417,7 +382,7 @@ $('btnAddHeader').addEventListener('click', function() {
 });
 $('btnAddRH').addEventListener('click', function() {
   responseHeaderRows.push({ id: uid(), name: '', value: '' });
-  renderResponseHeaders(); saveDraft();
+  renderResponseHeaders(); autoSave();
 });
 
 $('btnCopyResp').addEventListener('click', function() { copyText($('fBody').value, this); });
@@ -450,32 +415,75 @@ document.querySelectorAll('.hdr-tab').forEach(function(btn) {
   });
 });
 
-$('btnCancel').addEventListener('click', showList);
-$('btnSave').addEventListener('click',   saveRule);
+$('btnBack').addEventListener('click', function() {
+  if (!editId) {
+    // New rule: save if URL is filled, otherwise discard
+    var rule = buildRule();
+    if (rule) {
+      rules.push(rule);
+      save(render);
+    }
+  } else {
+    render();
+  }
+  showList();
+});
+
+// ── Import from DevTools panel ────────────────────────────────────────────────
+function applyImport(entry) {
+  chrome.storage.local.remove('pendingImport');
+  showForm(null);
+  $('fUrl').value = entry.url || '';
+  setMethod(entry.method || 'GET');
+  $('fStatus').value  = entry.statusCode || 200;
+  var rawBody = entry.responseBody || '';
+  $('fBody').value    = formatJSON(rawBody) || rawBody;
+  $('fReqBody').value = entry.requestBody  || '';
+  syncEditor('fBody',    'bodyHL',    'bodyNums');
+  syncEditor('fReqBody', 'reqBodyHL', 'reqBodyNums');
+  updateJSONStatus($('fBody').value,    $('jsonStatus'));
+  updateJSONStatus($('fReqBody').value, $('jsonStatusReq'));
+  // Save immediately so the mock is active as soon as the popup opens.
+  // Switch to edit mode so subsequent auto-saves update this rule.
+  var rule = buildRule();
+  if (rule) {
+    editId = rule.id;
+    rules.push(rule);
+    save(function() {});
+  }
+}
+
+chrome.storage.onChanged.addListener(function(changes) {
+  if (changes.pendingImport && changes.pendingImport.newValue) {
+    applyImport(changes.pendingImport.newValue);
+  }
+});
 
 ['fName','fMethod','fStatus','fDelay','fUrl'].forEach(function(id) {
-  $(id).addEventListener('input',  saveDraft);
-  $(id).addEventListener('change', saveDraft);
+  $(id).addEventListener('input',  autoSave);
+  $(id).addEventListener('change', autoSave);
 });
 
 // Inline body editor
 $('fBody').addEventListener('input', function() {
   syncEditor('fBody', 'bodyHL', 'bodyNums');
   updateJSONStatus($('fBody').value, $('jsonStatus'));
-  saveDraft();
+  autoSave();
 });
 $('fBody').addEventListener('scroll', function() {
   syncEditor('fBody', 'bodyHL', 'bodyNums');
+  $('bodySearchHL').scrollTop = $('fBody').scrollTop;
 });
 
 // Request body editor
 $('fReqBody').addEventListener('input', function() {
   syncEditor('fReqBody', 'reqBodyHL', 'reqBodyNums');
   updateJSONStatus($('fReqBody').value, $('jsonStatusReq'));
-  saveDraft();
+  autoSave();
 });
 $('fReqBody').addEventListener('scroll', function() {
   syncEditor('fReqBody', 'reqBodyHL', 'reqBodyNums');
+  $('reqBodySearchHL').scrollTop = $('fReqBody').scrollTop;
 });
 $('btnFormatReq').addEventListener('click', function() {
   var f = formatJSON($('fReqBody').value);
@@ -523,7 +531,7 @@ $('btnEditorBack').addEventListener('click', function() {
     syncEditor('fBody', 'bodyHL', 'bodyNums');
     updateJSONStatus($('fBody').value, $('jsonStatus'));
   }
-  saveDraft();
+  autoSave();
   $('viewEditor').style.display = 'none';
   $('viewForm').style.display = 'flex';
 });
@@ -534,6 +542,103 @@ $('btnEditorFormat').addEventListener('click', function() {
   if (f !== null) $('fBodyEditor').value = f;
   syncEditor('fBodyEditor', 'editorHL', 'editorNums');
   updateJSONStatus($('fBodyEditor').value, $('jsonStatusEditor'));
+});
+
+// ── Ctrl+F search in inline form editors ──────────────────────────────────────
+var formSearchMatches = [], formSearchIdx = 0;
+
+function getFormSearchTarget() {
+  var activeBtn = document.querySelector('.tab-btn.active');
+  if (!activeBtn) return null;
+  if (activeBtn.dataset.tab === 'response') return $('fBody');
+  if (activeBtn.dataset.tab === 'request')  return $('fReqBody');
+  return null;
+}
+
+// Render transparent highlight overlay — all matches yellow, current match orange
+function renderFormSearchHL() {
+  var target = getFormSearchTarget();
+  if (!target) return;
+  var overlayId = target.id === 'fBody' ? 'bodySearchHL' : 'reqBodySearchHL';
+  var overlay = $(overlayId);
+  if (!overlay) return;
+  var q = $('formSearchInput').value;
+  if (!formSearchMatches.length || !q) { overlay.innerHTML = ''; return; }
+  var text = target.value, pos = 0, html = '';
+  formSearchMatches.forEach(function(start, i) {
+    html += esc(text.slice(pos, start));
+    html += '<span class="smatch' + (i === formSearchIdx ? ' cur' : '') + '">' + esc(text.slice(start, start + q.length)) + '</span>';
+    pos = start + q.length;
+  });
+  html += esc(text.slice(pos));
+  overlay.innerHTML = html + '\n';
+  overlay.scrollTop = target.scrollTop;
+}
+
+// Scroll textarea to show the match by briefly placing the cursor there.
+// The browser handles word-wrap correctly; scroll position persists after focus returns.
+function scrollToFormMatch(ta, matchStart) {
+  ta.focus();
+  ta.setSelectionRange(matchStart, matchStart);
+  $('formSearchInput').focus();
+}
+
+function openFormSearch() {
+  if (!getFormSearchTarget()) return;
+  $('formSearch').classList.add('open');
+  // Defer so display:flex renders before focus()
+  setTimeout(function() { $('formSearchInput').focus(); $('formSearchInput').select(); }, 0);
+  runFormSearch();
+}
+
+function closeFormSearch(skipFocus) {
+  $('formSearch').classList.remove('open');
+  $('formSearchCount').textContent = '';
+  formSearchMatches = [];
+  $('bodySearchHL').innerHTML    = '';
+  $('reqBodySearchHL').innerHTML = '';
+  if (!skipFocus) {
+    var t = getFormSearchTarget();
+    if (t) t.focus();
+  }
+}
+
+function runFormSearch() {
+  var q = $('formSearchInput').value;
+  formSearchMatches = []; formSearchIdx = 0;
+  if (!q) { $('formSearchCount').textContent = ''; renderFormSearchHL(); return; }
+  var target = getFormSearchTarget();
+  if (!target) return;
+  var text = target.value, lo = q.toLowerCase(), i = 0;
+  while (i <= text.length - q.length) {
+    var idx = text.toLowerCase().indexOf(lo, i);
+    if (idx === -1) break;
+    formSearchMatches.push(idx);
+    i = idx + 1;
+  }
+  $('formSearchCount').textContent = formSearchMatches.length ? '1 / ' + formSearchMatches.length : '0 results';
+  renderFormSearchHL();
+}
+
+// Navigate matches — scroll to match but never steal focus from search input
+function jumpFormMatch(delta) {
+  if (!formSearchMatches.length) { $('formSearchCount').textContent = '0 results'; return; }
+  formSearchIdx = ((formSearchIdx + delta) % formSearchMatches.length + formSearchMatches.length) % formSearchMatches.length;
+  $('formSearchCount').textContent = (formSearchIdx + 1) + ' / ' + formSearchMatches.length;
+  var target = getFormSearchTarget();
+  if (target) scrollToFormMatch(target, formSearchMatches[formSearchIdx]);
+  renderFormSearchHL();
+}
+
+$('btnSearchBody').addEventListener('click', openFormSearch);
+$('btnSearchReq').addEventListener('click',  openFormSearch);
+$('formSearchClose').addEventListener('click', function() { closeFormSearch(); });
+$('formSearchPrev').addEventListener('click', function() { jumpFormMatch(-1); });
+$('formSearchNext').addEventListener('click', function() { jumpFormMatch(1); });
+$('formSearchInput').addEventListener('input', runFormSearch);
+$('formSearchInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') { e.shiftKey ? jumpFormMatch(-1) : jumpFormMatch(1); e.preventDefault(); }
+  if (e.key === 'Escape') closeFormSearch();
 });
 
 // ── Ctrl+F search in expand view ──────────────────────────────────────────────
@@ -591,20 +696,23 @@ document.querySelectorAll('.tab-btn').forEach(function(btn) {
     document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
     btn.classList.add('active');
     $('tab' + btn.dataset.tab.charAt(0).toUpperCase() + btn.dataset.tab.slice(1)).classList.add('active');
+    closeFormSearch(true);
   });
 });
 
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape' && $('editorSearch').classList.contains('open')) { closeSearch(); return; }
+  if (e.key === 'Escape' && $('formSearch').classList.contains('open')) { closeFormSearch(); return; }
   if (e.key === 'Escape') showList();
-  if (e.key === 'Enter' && e.ctrlKey && $('viewForm').style.display !== 'none') saveRule();
+  if (e.key === 'Enter' && e.ctrlKey && $('viewForm').style.display !== 'none') $('btnBack').click();
   if (e.key === 'f' && e.ctrlKey && $('viewEditor').style.display !== 'none') { e.preventDefault(); openSearch(); }
+  if (e.key === 'f' && e.ctrlKey && $('viewForm').style.display !== 'none') { e.preventDefault(); openFormSearch(); }
 });
 
-load(function() {
+load(function(pendingImport) {
   render();
   applyActiveTab();
-  if (currentDraft && (currentDraft.url || currentDraft.body || currentDraft.name)) {
-    showForm(null);
+  if (pendingImport) {
+    applyImport(pendingImport);
   }
 });

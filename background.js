@@ -29,3 +29,4 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.storage.onChanged.addListener(() => {
   chrome.storage.local.get({ rules: [], enabled: true, injectHeaders: [] }, updateBadge);
 });
+
