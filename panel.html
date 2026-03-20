@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Request Mocker</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #f5f5f5;
+  --surface:  #ffffff;
+  --border:   #e8e8e8;
+  --text:     #1a1a1a;
+  --text-sec: #6b6b6b;
+  --text-dim: #a3a3a3;
+  --hover:    #f0f0f0;
+}
+
+html, body { height: 100%; overflow: hidden; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+
+* { scrollbar-width: thin; scrollbar-color: #d0d0d0 transparent; }
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d0d0d0; border-radius: 4px; }
+
+/* Toolbar */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.filter-input {
+  flex: 1;
+  height: 28px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+  background: var(--bg);
+  color: var(--text);
+  transition: border-color .15s;
+}
+.filter-input:focus { border-color: #1090D4; box-shadow: 0 0 0 3px rgba(16,144,212,.1); }
+
+.entry-count {
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  min-width: 48px;
+  text-align: right;
+}
+
+.btn-clear {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-sec);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s, color .15s;
+}
+.btn-clear:hover { background: var(--hover); color: var(--text); }
+
+/* List */
+.list { flex: 1; min-height: 0; overflow-y: auto; }
+
+/* Empty state */
+.empty {
+  padding: 60px 20px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 2.4;
+}
+.empty-icon { font-size: 36px; margin-bottom: 8px; }
+
+/* Entry row */
+.entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  transition: background .1s;
+}
+.entry:hover { background: var(--hover); }
+
+.entry-url {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-sec);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btn-mock {
+  padding: 3px 10px;
+  border: 1px solid #1090D4;
+  border-radius: 5px;
+  background: transparent;
+  color: #1090D4;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background .15s, color .15s;
+}
+.btn-mock:hover { background: #1090D4; color: #fff; }
+.btn-mock.done { border-color: #00875a; color: #00875a; }
+.btn-mock.done:hover { background: #00875a; color: #fff; }
+
+/* Method badges */
+.badge { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; flex-shrink: 0; }
+.m-GET    { background: #e0fff2; color: #00875a; }
+.m-POST   { background: #fff4e0; color: #b76000; }
+.m-PUT    { background: #f0e8ff; color: #6c5ce7; }
+.m-DELETE { background: #ffe8e8; color: #cc0000; }
+.m-PATCH  { background: #e0f4ff; color: #0066b8; }
+.m-ANY    { background: #f0f0f0; color: #6b6b6b; }
+
+/* Status */
+.status { font-size: 11px; font-weight: 700; flex-shrink: 0; min-width: 28px; }
+.s-ok   { color: #00875a; }
+.s-warn { color: #b76000; }
+.s-err  { color: #cc0000; }
+.s-neu  { color: #a3a3a3; }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <input type="text" class="filter-input" id="filterInput" placeholder="Filter by URL…" autocomplete="off">
+  <span class="entry-count" id="entryCount"></span>
+  <button type="button" class="btn-clear" id="btnClear">Clear</button>
+</div>
+
+<div class="list" id="list">
+  <div class="empty" id="empty">
+    <div class="empty-icon">🌐</div>
+    <div>No requests captured yet</div>
+    <div style="font-size:11px;color:#c8c8c8">Browse the page — requests will appear here</div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+var MAX = 500;
+var entries = [];
+var filterText = '';
+
+var BADGE = { GET:'m-GET', POST:'m-POST', PUT:'m-PUT', DELETE:'m-DELETE', PATCH:'m-PATCH' };
+
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function statusClass(code) {
+  if (!code) return 's-neu';
+  return code < 300 ? 's-ok' : code < 400 ? 's-warn' : 's-err';
+}
+
+function render() {
+  var list = document.getElementById('list');
+  var empty = document.getElementById('empty');
+  var count = document.getElementById('entryCount');
+
+  var filtered = filterText
+    ? entries.filter(function(e) { return e.url.toLowerCase().indexOf(filterText) !== -1; })
+    : entries;
+
+  count.textContent = filtered.length + ' / ' + entries.length;
+  empty.style.display = filtered.length ? 'none' : '';
+
+  list.querySelectorAll('.entry').forEach(function(r) { r.remove(); });
+
+  filtered.forEach(function(item, idx) {
+    var mc = BADGE[item.method] || 'm-ANY';
+    var sc = statusClass(item.statusCode);
+    var row = document.createElement('div');
+    row.className = 'entry';
+    row.innerHTML =
+      '<span class="badge ' + mc + '">' + esc(item.method) + '</span>' +
+      '<span class="status ' + sc + '">' + (item.statusCode || '—') + '</span>' +
+      '<span class="entry-url" title="' + esc(item.url) + '">' + esc(item.url) + '</span>' +
+      '<button type="button" class="btn-mock" data-idx="' + idx + '">Mock</button>';
+    row.querySelector('.btn-mock').addEventListener('click', function(e) {
+      var btn = e.currentTarget;
+      var entry = filtered[parseInt(btn.dataset.idx)];
+      chrome.storage.local.set({ pendingImport: entry }, function() {
+        btn.textContent = '✓ Sent';
+        btn.classList.add('done');
+        setTimeout(function() {
+          btn.textContent = 'Mock';
+          btn.classList.remove('done');
+        }, 1500);
+      });
+    });
+    list.appendChild(row);
+  });
+}
+
+chrome.devtools.network.onRequestFinished.addListener(function(harEntry) {
+  harEntry.getContent(function(content, encoding) {
+    var req = harEntry.request || {};
+    var res = harEntry.response || {};
+    var hdrs = {};
+    (res.headers || []).forEach(function(h) { hdrs[h.name] = h.value; });
+
+    var body = '';
+    if (encoding === 'base64') {
+      try { body = atob(content || ''); } catch(e) { body = ''; }
+    } else {
+      body = content || '';
+    }
+
+    var item = {
+      url:             req.url || '',
+      method:          (req.method || 'GET').toUpperCase(),
+      statusCode:      res.status || 0,
+      responseBody:    body,
+      responseHeaders: JSON.stringify(hdrs),
+      requestBody:     (req.postData && req.postData.text) || ''
+    };
+
+    entries.unshift(item);
+    if (entries.length > MAX) entries.pop();
+    render();
+  });
+});
+
+document.getElementById('filterInput').addEventListener('input', function(e) {
+  filterText = e.target.value.toLowerCase().trim();
+  render();
+});
+
+document.getElementById('btnClear').addEventListener('click', function() {
+  entries = [];
+  render();
+});
+
+render();
+</script>
+</body>
+</html>

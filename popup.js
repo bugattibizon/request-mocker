@@ -106,14 +106,14 @@ document.addEventListener('click', function(e) {
 
 // ── Storage ──────────────────────────────────────────────────────────────────
 function load(cb) {
-  chrome.storage.local.get({ rules: [], enabled: true, formDraft: null, injectHeaders: [], darkTheme: false }, function(d) {
+  chrome.storage.local.get({ rules: [], enabled: true, formDraft: null, injectHeaders: [], darkTheme: false, pendingImport: null }, function(d) {
     rules         = d.rules;
     enabled       = d.enabled;
     currentDraft  = d.formDraft;
     injectHeaders = d.injectHeaders;
     darkTheme     = d.darkTheme;
     applyTheme();
-    if (cb) cb();
+    if (cb) cb(d.pendingImport);
   });
 }
 function save(cb) { chrome.storage.local.set({ rules: rules, enabled: enabled }, cb); }
@@ -190,7 +190,6 @@ function applyActiveTab() {
   $('ruleList').style.display     = isHeaders ? 'none' : '';
   $('ihPanel').style.display      = isHeaders ? 'flex' : 'none';
   $('btnAdd').style.display        = isHeaders ? 'none' : '';
-  $('btnImportHar').style.display  = isHeaders ? 'none' : '';
   $('btnAddHeader').style.display  = isHeaders ? '' : 'none';
   if (isHeaders) renderHeaders();
 }
@@ -200,7 +199,6 @@ function showList() {
   editId = null;
   $('viewForm').style.display   = 'none';
   $('viewEditor').style.display = 'none';
-  $('viewImport').style.display = 'none';
   $('viewList').style.display   = 'flex';
   applyActiveTab();
 }
@@ -441,7 +439,6 @@ document.querySelectorAll('.hdr-tab').forEach(function(btn) {
     btn.classList.add('active');
     $('viewForm').style.display   = 'none';
     $('viewEditor').style.display = 'none';
-    $('viewImport').style.display = 'none';
     $('viewList').style.display   = 'flex';
     applyActiveTab();
   });
@@ -450,34 +447,15 @@ document.querySelectorAll('.hdr-tab').forEach(function(btn) {
 $('btnCancel').addEventListener('click', showList);
 $('btnSave').addEventListener('click',   saveRule);
 
-// ── HAR import ────────────────────────────────────────────────────────────────
-function parseHar(text) {
-  var har = JSON.parse(text);
-  var entries = (har.log || har).entries || [];
-  return entries.map(function(e) {
-    var req = e.request || {};
-    var res = e.response || {};
-    var hdrs = {};
-    (res.headers || []).forEach(function(h) { hdrs[h.name] = h.value; });
-    return {
-      url:             req.url || '',
-      method:          (req.method || 'GET').toUpperCase(),
-      statusCode:      res.status || 200,
-      responseBody:    (res.content && res.content.text) || '',
-      responseHeaders: JSON.stringify(hdrs),
-      requestBody:     (req.postData && req.postData.text) || ''
-    };
-  });
-}
-
-function applyHarEntry(entry) {
-  $('viewImport').style.display = 'none';
+// ── Import from DevTools panel ────────────────────────────────────────────────
+function applyImport(entry) {
+  chrome.storage.local.remove('pendingImport');
   showForm(null);
-  $('fUrl').value     = entry.url;
-  setMethod(entry.method);
-  $('fStatus').value  = entry.statusCode;
-  $('fBody').value    = entry.responseBody;
-  $('fReqBody').value = entry.requestBody;
+  $('fUrl').value     = entry.url     || '';
+  setMethod(entry.method || 'GET');
+  $('fStatus').value  = entry.statusCode || 200;
+  $('fBody').value    = entry.responseBody || '';
+  $('fReqBody').value = entry.requestBody  || '';
   responseHeaderRows  = parseResponseHeaders(entry.responseHeaders);
   renderResponseHeaders();
   syncEditor('fBody',    'bodyHL',    'bodyNums');
@@ -486,60 +464,10 @@ function applyHarEntry(entry) {
   updateJSONStatus($('fReqBody').value, $('jsonStatusReq'));
 }
 
-function showImportHar() {
-  $('viewList').style.display   = 'none';
-  $('viewImport').style.display = 'flex';
-  $('harPaste').style.display   = 'flex';
-  $('harPick').style.display    = 'none';
-  $('harInput').value = '';
-  $('harError').textContent = '';
-  setTimeout(function() { $('harInput').focus(); }, 50);
-}
-
-$('btnImportHar').addEventListener('click', showImportHar);
-
-$('btnHarCancel').addEventListener('click', function() {
-  $('viewImport').style.display = 'none';
-  $('viewList').style.display = 'flex';
-});
-
-$('btnHarImport').addEventListener('click', function() {
-  var text = $('harInput').value.trim();
-  if (!text) {
-    $('harError').textContent = 'Paste a HAR JSON first.';
-    $('harError').className = 'json-status json-err';
-    return;
+chrome.storage.onChanged.addListener(function(changes) {
+  if (changes.pendingImport && changes.pendingImport.newValue) {
+    applyImport(changes.pendingImport.newValue);
   }
-  var entries;
-  try { entries = parseHar(text); } catch(e) {
-    $('harError').textContent = 'Invalid HAR — could not parse JSON.';
-    $('harError').className = 'json-status json-err';
-    return;
-  }
-  if (!entries.length) {
-    $('harError').textContent = 'No network entries found in HAR.';
-    $('harError').className = 'json-status json-err';
-    return;
-  }
-  if (entries.length === 1) { applyHarEntry(entries[0]); return; }
-  // Multiple entries — show picker
-  $('harPaste').style.display = 'none';
-  $('harPick').style.display  = 'flex';
-  var list = $('harPickList');
-  list.innerHTML = '';
-  entries.forEach(function(entry) {
-    var mc = {GET:'m-GET',POST:'m-POST',PUT:'m-PUT',DELETE:'m-DELETE',PATCH:'m-PATCH'}[entry.method] || 'm-ANY';
-    var sc = entry.statusCode < 300 ? 's-ok' : entry.statusCode < 400 ? 's-warn' : 's-err';
-    var row = document.createElement('div');
-    row.className = 'rule';
-    row.style.cssText = 'cursor:pointer;padding:10px 12px;gap:10px';
-    row.innerHTML =
-      '<span class="badge ' + mc + '">' + entry.method + '</span>' +
-      '<span style="flex:1;min-width:0;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-dim)">' + esc(entry.url) + '</span>' +
-      '<span class="status ' + sc + '">' + entry.statusCode + '</span>';
-    row.addEventListener('click', function() { applyHarEntry(entry); });
-    list.appendChild(row);
-  });
 });
 
 ['fName','fMethod','fStatus','fDelay','fUrl'].forEach(function(id) {
@@ -690,10 +618,12 @@ document.addEventListener('keydown', function(e) {
   if (e.key === 'f' && e.ctrlKey && $('viewEditor').style.display !== 'none') { e.preventDefault(); openSearch(); }
 });
 
-load(function() {
+load(function(pendingImport) {
   render();
   applyActiveTab();
-  if (currentDraft && (currentDraft.url || currentDraft.body || currentDraft.name)) {
+  if (pendingImport) {
+    applyImport(pendingImport);
+  } else if (currentDraft && (currentDraft.url || currentDraft.body || currentDraft.name)) {
     showForm(null);
   }
 });
