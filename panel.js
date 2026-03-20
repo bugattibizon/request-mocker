@@ -1,6 +1,6 @@
 'use strict';
 
-var MAX = 500;
+var MAX = 300;
 var entries = [];
 var filterText = '';
 
@@ -56,18 +56,19 @@ function render() {
   });
 }
 
-// Called by devtools.js when the panel is first shown — flushes buffered entries
-window.rmFlush = function(items) {
-  entries = items.slice(0, MAX);
+// Load existing captures on panel open
+chrome.storage.local.get({ capturedRequests: [] }, function(d) {
+  entries = d.capturedRequests || [];
   render();
-};
+});
 
-// Called by devtools.js for each new request
-window.rmAddEntry = function(item) {
-  entries.unshift(item);
-  if (entries.length > MAX) entries.pop();
-  render();
-};
+// Live updates as devtools.js writes new captures
+chrome.storage.onChanged.addListener(function(changes) {
+  if (changes.capturedRequests) {
+    entries = changes.capturedRequests.newValue || [];
+    render();
+  }
+});
 
 document.getElementById('filterInput').addEventListener('input', function(e) {
   filterText = e.target.value.toLowerCase().trim();
@@ -75,8 +76,5 @@ document.getElementById('filterInput').addEventListener('input', function(e) {
 });
 
 document.getElementById('btnClear').addEventListener('click', function() {
-  entries = [];
-  render();
+  chrome.storage.local.set({ capturedRequests: [] });
 });
-
-render();
