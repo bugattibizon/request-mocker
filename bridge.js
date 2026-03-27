@@ -8,3 +8,10 @@ function sync() {
 
 sync();
 chrome.storage.onChanged.addListener(sync);
+
+// Forward captures from the interceptor (main world) to storage so the DevTools panel
+// can display them. The interceptor dispatches __RM_capture with the real response body,
+// which is more reliable than the DevTools getContent() API for compressed responses.
+window.addEventListener('__RM_capture', function(e) {
+  chrome.storage.local.set({ lastCapture: e.detail });
+});
