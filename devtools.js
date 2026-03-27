@@ -38,6 +38,11 @@ chrome.devtools.network.onRequestFinished.addListener(function(harEntry) {
     } else {
       body = content || '';
     }
+    // Fallback: Chrome sometimes populates res.content.text directly in the
+    // HAR entry when getContent() returns empty (e.g. for cached responses).
+    if (!body && res.content && res.content.text) {
+      body = res.content.text;
+    }
     if (body.length > BODY_LIMIT) {
       body = body.slice(0, BODY_LIMIT) + '\n/* … truncated (' + Math.round(body.length / 1024) + ' KB total) */';
     }
