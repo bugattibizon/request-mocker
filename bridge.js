@@ -8,3 +8,11 @@ function sync() {
 
 sync();
 chrome.storage.onChanged.addListener(sync);
+
+// Forward real-request captures from the interceptor (MAIN world) to storage.
+// postMessage is used because CustomEvent.detail from the MAIN world arrives as a
+// cross-context proxy that chrome.storage.local.set() cannot serialize.
+window.addEventListener('message', function(e) {
+  if (e.source !== window || !e.data || e.data.__RM !== 'capture') return;
+  chrome.storage.local.set({ lastCapture: { item: e.data.item, ts: e.data.ts } });
+});

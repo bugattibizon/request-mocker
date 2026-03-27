@@ -15,6 +15,20 @@
     'connection', 'keep-alive', 'upgrade',
   ]);
 
+  // ── Capture helpers (DevTools panel) ───────────────────────────────────────
+  const CAPTURE_TEXT  = /json|text|xml|javascript/;
+  const CAPTURE_LIMIT = 50 * 1024; // 50 KB
+
+  // Send a captured request/response to bridge.js via postMessage.
+  // postMessage structure-clones data across the MAIN→isolated world boundary.
+  function captureReal(url, method, statusCode, responseBody, requestBody) {
+    window.postMessage({
+      __RM: 'capture',
+      item: { url, method, statusCode, responseBody, requestBody: requestBody || '' },
+      ts:   Date.now(),
+    }, '*');
+  }
+
   function buildCaches() {
     _rules = (state.rules || [])
       .filter(r => r.enabled)
@@ -170,16 +184,15 @@
 
   // ── fetch ──────────────────────────────────────────────────────────────────
   const _fetch = window.fetch;
-  window.fetch = function(input, init = {}) {
-    const url    = input instanceof Request ? input.url : String(input);
-    const method = (input instanceof Request ? input.method : (init.method ?? 'GET')).toUpperCase();
+  window.fetch = async function(input, init = {}) {
+    const url     = input instanceof Request ? input.url : String(input);
+    const method  = (input instanceof Request ? input.method : (init.method ?? 'GET')).toUpperCase();
+    const reqBody = typeof init.body === 'string' ? init.body
+      : init.body instanceof URLSearchParams ? init.body.toString() : '';
     // Extract body only when at least one rule uses body matching
-    const body   = _needBody
-      ? (typeof init.body === 'string' ? init.body
-         : init.body instanceof URLSearchParams ? init.body.toString() : '')
-      : '';
+    const matchBody = _needBody ? reqBody : '';
 
-    const rule = match(url, method, body);
+    const rule = match(url, method, matchBody);
     if (rule) return mockResponse(rule, url);
 
     if (_ih.length) {
@@ -187,7 +200,17 @@
       _ih.forEach(h => headers.set(h.name, h.value));
       init = { ...init, headers };
     }
-    return _fetch.call(this, input, init);
+    const resp = await _fetch.call(this, input, init);
+    // Capture real response for the DevTools panel.
+    // Clone so the page receives an untouched response.
+    const ct = (resp.headers.get('content-type') || '').toLowerCase();
+    if (!ct || CAPTURE_TEXT.test(ct)) {
+      resp.clone().text().then(function(t) {
+        if (t.length > CAPTURE_LIMIT) t = t.slice(0, CAPTURE_LIMIT);
+        captureReal(url, method, resp.status, t, reqBody);
+      }).catch(function() {});
+    }
+    return resp;
   };
 
   // ── XMLHttpRequest ─────────────────────────────────────────────────────────
@@ -207,11 +230,22 @@
     };
 
     xhr.send = function(body) {
-      const b    = _needBody && typeof body === 'string' ? body : '';
-      const rule = match(_url, _method, b);
+      const reqBody = typeof body === 'string' ? body : '';
+      const b       = _needBody ? reqBody : '';
+      const rule    = match(_url, _method, b);
 
       if (!rule) {
         _ih.forEach(h => { try { xhr.setRequestHeader(h.name, h.value); } catch {} });
+        // Capture real response for the DevTools panel
+        xhr.addEventListener('load', function() {
+          var ct = (xhr.getResponseHeader('content-type') || '').toLowerCase();
+          if (!ct || CAPTURE_TEXT.test(ct)) {
+            var t = '';
+            try { t = xhr.responseText || ''; } catch(e) {}
+            if (t.length > CAPTURE_LIMIT) t = t.slice(0, CAPTURE_LIMIT);
+            captureReal(_url, _method, xhr.status, t, reqBody);
+          }
+        }, { once: true });
         return origSend(body);
       }
 
