@@ -23,10 +23,9 @@ chrome.devtools.network.onRequestFinished.addListener(function(harEntry) {
   }
 
   var mimeType = (res.content && res.content.mimeType) || '';
-  var bodySize  = (res.content && res.content.size)     || res.bodySize || 0;
 
-  // Skip binary MIME types or empty bodies — no point reading content
-  if (bodySize === 0 || (mimeType && !TEXT_MIME.test(mimeType))) {
+  // Skip known binary MIME types — bodySize is unreliable for compressed/chunked responses
+  if (mimeType && !TEXT_MIME.test(mimeType)) {
     capture(req, res, '');
     return;
   }
