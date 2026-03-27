@@ -15,7 +15,6 @@
     'connection', 'keep-alive', 'upgrade',
   ]);
 
-
   function buildCaches() {
     _rules = (state.rules || [])
       .filter(r => r.enabled)
@@ -174,6 +173,7 @@
   window.fetch = function(input, init = {}) {
     const url    = input instanceof Request ? input.url : String(input);
     const method = (input instanceof Request ? input.method : (init.method ?? 'GET')).toUpperCase();
+    // Extract body only when at least one rule uses body matching
     const body   = _needBody
       ? (typeof init.body === 'string' ? init.body
          : init.body instanceof URLSearchParams ? init.body.toString() : '')
