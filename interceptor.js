@@ -15,18 +15,6 @@
     'connection', 'keep-alive', 'upgrade',
   ]);
 
-  const CAPTURE_TEXT  = /json|text|xml|javascript/;
-  const CAPTURE_LIMIT = 50 * 1024;
-
-  function captureReal(url, method, status, body, requestBody) {
-    // postMessage to the isolated-world bridge — correctly structure-clones the data
-    // (CustomEvent.detail crosses world boundaries as a proxy that chrome.storage can't serialize)
-    window.postMessage({
-      __RM: 'capture',
-      item: { url, method, statusCode: status, responseBody: body, requestBody: requestBody || '' },
-      ts:   Date.now(),
-    }, '*');
-  }
 
   function buildCaches() {
     _rules = (state.rules || [])
@@ -183,14 +171,15 @@
 
   // ── fetch ──────────────────────────────────────────────────────────────────
   const _fetch = window.fetch;
-  window.fetch = async function(input, init = {}) {
-    const url      = input instanceof Request ? input.url : String(input);
-    const method   = (input instanceof Request ? input.method : (init.method ?? 'GET')).toUpperCase();
-    const reqBody  = typeof init.body === 'string' ? init.body
-      : init.body instanceof URLSearchParams ? init.body.toString() : '';
-    const matchBody = _needBody ? reqBody : '';
+  window.fetch = function(input, init = {}) {
+    const url    = input instanceof Request ? input.url : String(input);
+    const method = (input instanceof Request ? input.method : (init.method ?? 'GET')).toUpperCase();
+    const body   = _needBody
+      ? (typeof init.body === 'string' ? init.body
+         : init.body instanceof URLSearchParams ? init.body.toString() : '')
+      : '';
 
-    const rule = match(url, method, matchBody);
+    const rule = match(url, method, body);
     if (rule) return mockResponse(rule, url);
 
     if (_ih.length) {
@@ -198,16 +187,7 @@
       _ih.forEach(h => headers.set(h.name, h.value));
       init = { ...init, headers };
     }
-    const resp = await _fetch.call(this, input, init);
-    // Capture for DevTools panel — clone so page gets the untouched response
-    const ct = (resp.headers.get('content-type') || '').toLowerCase();
-    if (!ct || CAPTURE_TEXT.test(ct)) {
-      resp.clone().text().then(function(t) {
-        if (t.length > CAPTURE_LIMIT) t = t.slice(0, CAPTURE_LIMIT);
-        captureReal(url, method, resp.status, t, reqBody);
-      }).catch(function() {});
-    }
-    return resp;
+    return _fetch.call(this, input, init);
   };
 
   // ── XMLHttpRequest ─────────────────────────────────────────────────────────
@@ -227,22 +207,11 @@
     };
 
     xhr.send = function(body) {
-      const reqBody = typeof body === 'string' ? body : '';
-      const b       = _needBody ? reqBody : '';
-      const rule    = match(_url, _method, b);
+      const b    = _needBody && typeof body === 'string' ? body : '';
+      const rule = match(_url, _method, b);
 
       if (!rule) {
         _ih.forEach(h => { try { xhr.setRequestHeader(h.name, h.value); } catch {} });
-        // Capture real response for DevTools panel
-        xhr.addEventListener('load', function() {
-          var ct = (xhr.getResponseHeader('content-type') || '').toLowerCase();
-          if (!ct || CAPTURE_TEXT.test(ct)) {
-            var t = '';
-            try { t = xhr.responseText || ''; } catch(e) {}
-            if (t.length > CAPTURE_LIMIT) t = t.slice(0, CAPTURE_LIMIT);
-            captureReal(_url, _method, xhr.status, t, reqBody);
-          }
-        }, { once: true });
         return origSend(body);
       }
 
