@@ -42,7 +42,7 @@
         };
       });
 
-    _ih       = (state.injectHeaders || []).filter(h => h.enabled && h.name);
+    _ih       = state.enabled ? (state.injectHeaders || []).filter(h => h.enabled && h.name) : [];
     _needBody = _rules.some(r => r._body);
   }
 
