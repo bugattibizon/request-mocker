@@ -19,10 +19,13 @@
   const CAPTURE_LIMIT = 50 * 1024;
 
   function captureReal(url, method, status, body, requestBody) {
-    window.dispatchEvent(new CustomEvent('__RM_capture', { detail: {
+    // postMessage to the isolated-world bridge — correctly structure-clones the data
+    // (CustomEvent.detail crosses world boundaries as a proxy that chrome.storage can't serialize)
+    window.postMessage({
+      __RM: 'capture',
       item: { url, method, statusCode: status, responseBody: body, requestBody: requestBody || '' },
       ts:   Date.now(),
-    }}));
+    }, '*');
   }
 
   function buildCaches() {
