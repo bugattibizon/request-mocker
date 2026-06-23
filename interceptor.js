@@ -197,17 +197,29 @@
     if (rule && !rule.redirectUrl) return mockResponse(rule, url);
 
     // Either a redirect rule or no matching rule — make the real request.
-    // When input is a Request object, new Request(url, input) copies all its properties
-    // (headers, credentials, body, etc.) to the new URL so auth is preserved.
-    const targetInput = (rule && rule.redirectUrl)
-      ? (input instanceof Request ? new Request(rule.redirectUrl, input) : rule.redirectUrl)
-      : input;
-    if (!rule && _ih.length) {
+    let finalInput = input;
+    if (rule && rule.redirectUrl) {
+      finalInput = rule.redirectUrl;
+      if (input instanceof Request) {
+        // fetch(new Request(url, opts)) stores everything on the Request, not in init.
+        // Copy headers/credentials from it so auth tokens are preserved on redirect.
+        const headers = new Headers();
+        try { input.headers.forEach((v, k) => headers.set(k, v)); } catch(e) {}
+        if (init.headers) new Headers(init.headers).forEach((v, k) => headers.set(k, v));
+        init = {
+          method:      init.method      !== undefined ? init.method      : input.method,
+          credentials: init.credentials !== undefined ? init.credentials : input.credentials,
+          cache:       init.cache       !== undefined ? init.cache       : input.cache,
+          body:        init.body        !== undefined ? init.body        : input.body,
+          headers,
+        };
+      }
+    } else if (!rule && _ih.length) {
       const headers = new Headers(init.headers || {});
       _ih.forEach(h => headers.set(h.name, h.value));
       init = { ...init, headers };
     }
-    const resp = await _fetch.call(this, targetInput, init);
+    const resp = await _fetch.call(this, finalInput, init);
     // Capture real response for the DevTools panel.
     // Clone so the page receives an untouched response.
     const ct = (resp.headers.get('content-type') || '').toLowerCase();
