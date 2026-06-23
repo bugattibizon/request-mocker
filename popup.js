@@ -139,11 +139,31 @@ function buildRule() {
     delay:           parseInt($('fDelay').value)  || 0,
     urlPattern:      urlPattern,
     isRegex:         false,
+    redirectUrl:     $('fRedirectUrl').value.trim(),
     requestBody:     $('fReqBody').value,
     responseBody:    $('fBody').value,
     responseHeaders: responseHeadersToJSON(),
     pagination:      readPaginationConfig(),
   };
+}
+
+// Toggle mock-only tabs when redirect URL is filled
+function updateRedirectMode() {
+  var isRedirect = !!$('fRedirectUrl').value.trim();
+  ['response','headers','pagination'].forEach(function(tab) {
+    var btn = document.querySelector('.tab-btn[data-tab="' + tab + '"]');
+    if (btn) btn.style.display = isRedirect ? 'none' : '';
+  });
+  if (isRedirect) {
+    var activeBtn = document.querySelector('.tab-btn.active');
+    if (activeBtn && activeBtn.dataset.tab !== 'request') {
+      document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+      document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
+      var reqBtn = document.querySelector('.tab-btn[data-tab="request"]');
+      if (reqBtn) reqBtn.classList.add('active');
+      $('tabRequest').classList.add('active');
+    }
+  }
 }
 
 function autoSave() {
@@ -230,23 +250,25 @@ function showForm(id) {
   $('formTitle').textContent = id ? 'Edit Mock Rule' : 'New Mock Rule';
 
   if (rule) {
-    $('fName').value    = rule.name          || '';
+    $('fName').value        = rule.name          || '';
     setMethod(rule.method || 'GET');
-    $('fStatus').value  = rule.statusCode    || 200;
-    $('fDelay').value   = rule.delay         || 0;
-    $('fUrl').value     = rule.urlPattern    || '';
-    $('fBody').value    = rule.responseBody  || '';
-    $('fReqBody').value = rule.requestBody   || '';
-    responseHeaderRows  = parseResponseHeaders(rule.responseHeaders || '{"Content-Type":"application/json"}');
+    $('fStatus').value      = rule.statusCode    || 200;
+    $('fDelay').value       = rule.delay         || 0;
+    $('fUrl').value         = rule.urlPattern    || '';
+    $('fRedirectUrl').value = rule.redirectUrl   || '';
+    $('fBody').value        = rule.responseBody  || '';
+    $('fReqBody').value     = rule.requestBody   || '';
+    responseHeaderRows      = parseResponseHeaders(rule.responseHeaders || '{"Content-Type":"application/json"}');
   } else {
-    $('fName').value    = '';
+    $('fName').value        = '';
     setMethod('GET');
-    $('fStatus').value  = 200;
-    $('fDelay').value   = 0;
-    $('fUrl').value     = '';
-    $('fBody').value    = '';
-    $('fReqBody').value = '';
-    responseHeaderRows  = parseResponseHeaders('{"Content-Type":"application/json"}');
+    $('fStatus').value      = 200;
+    $('fDelay').value       = 0;
+    $('fUrl').value         = '';
+    $('fRedirectUrl').value = '';
+    $('fBody').value        = '';
+    $('fReqBody').value     = '';
+    responseHeaderRows      = parseResponseHeaders('{"Content-Type":"application/json"}');
   }
 
   // Pagination fields
@@ -263,11 +285,12 @@ function showForm(id) {
   updateJSONStatus($('fReqBody').value, $('jsonStatusReq'));
   renderResponseHeaders();
 
-  // reset to Response tab
-  document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+  // Reset tabs then apply redirect mode (which may hide some tabs)
+  document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); b.style.display = ''; });
   document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
   document.querySelector('.tab-btn[data-tab="response"]').classList.add('active');
   $('tabResponse').classList.add('active');
+  updateRedirectMode();
   $('viewList').style.display = 'none';
   $('viewForm').style.display = 'flex';
 }
@@ -306,12 +329,13 @@ function render() {
       '<div class="rule-body">' +
         '<div class="rule-name">' + esc(rule.name || rule.urlPattern) + '</div>' +
         '<div class="rule-meta">' +
-          methodBadge(rule.method) + statusBadge(rule.statusCode) +
+          methodBadge(rule.method) +
+          (rule.redirectUrl ? '<span class="meta-text" style="color:#1090D4">→ redirect</span>' : statusBadge(rule.statusCode)) +
           (rule.delay   ? '<span class="meta-text">⏱ ' + rule.delay + 'ms</span>' : '') +
           (rule.isRegex ? '<span class="meta-text">regex</span>' : '') +
-          (rule.pagination && rule.pagination.enabled ? '<span class="meta-text">⇌ ' + (rule.pagination.totalPages || '?') + ' pages</span>' : '') +
+          (!rule.redirectUrl && rule.pagination && rule.pagination.enabled ? '<span class="meta-text">⇌ ' + (rule.pagination.totalPages || '?') + ' pages</span>' : '') +
         '</div>' +
-        '<div class="rule-url">' + esc(rule.urlPattern) + '</div>' +
+        '<div class="rule-url">' + esc(rule.urlPattern) + (rule.redirectUrl ? ' → ' + esc(rule.redirectUrl) : '') + '</div>' +
       '</div>' +
       '<div class="rule-actions">' +
         '<button type="button" class="icon-btn danger dbtn" data-id="' + rule.id + '" title="Delete">' +
@@ -483,10 +507,12 @@ chrome.storage.onChanged.addListener(function(changes) {
   }
 });
 
-['fName','fMethod','fStatus','fDelay','fUrl'].forEach(function(id) {
+['fName','fMethod','fStatus','fDelay','fUrl','fRedirectUrl'].forEach(function(id) {
   $(id).addEventListener('input',  autoSave);
   $(id).addEventListener('change', autoSave);
 });
+
+$('fRedirectUrl').addEventListener('input', updateRedirectMode);
 
 // Pagination field wiring
 $('fPagEnabled').addEventListener('change', function() {

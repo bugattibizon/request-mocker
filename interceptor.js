@@ -53,6 +53,7 @@
           delay:        r.delay,
           _headers:     hdrs,
           pagination:   r.pagination,
+          redirectUrl:  (r.redirectUrl || '').trim(),
         };
       });
 
@@ -193,14 +194,16 @@
     const matchBody = _needBody ? reqBody : '';
 
     const rule = match(url, method, matchBody);
-    if (rule) return mockResponse(rule, url);
+    if (rule && !rule.redirectUrl) return mockResponse(rule, url);
 
-    if (_ih.length) {
+    // Either a redirect rule or no matching rule — make the real request
+    const targetInput = (rule && rule.redirectUrl) ? rule.redirectUrl : input;
+    if (!rule && _ih.length) {
       const headers = new Headers(init.headers || {});
       _ih.forEach(h => headers.set(h.name, h.value));
       init = { ...init, headers };
     }
-    const resp = await _fetch.call(this, input, init);
+    const resp = await _fetch.call(this, targetInput, init);
     // Capture real response for the DevTools panel.
     // Clone so the page receives an untouched response.
     const ct = (resp.headers.get('content-type') || '').toLowerCase();
@@ -230,45 +233,52 @@
     };
 
     xhr.send = function(body) {
-      const reqBody = typeof body === 'string' ? body : '';
-      const b       = _needBody ? reqBody : '';
-      const rule    = match(_url, _method, b);
+      const reqBody          = typeof body === 'string' ? body : '';
+      const b                = _needBody ? reqBody : '';
+      const rule             = match(_url, _method, b);
+      const origUrlForCapture = _url; // keep original URL for DevTools capture
 
-      if (!rule) {
-        _ih.forEach(h => { try { xhr.setRequestHeader(h.name, h.value); } catch {} });
-        // Capture real response for the DevTools panel
-        xhr.addEventListener('load', function() {
-          var ct = (xhr.getResponseHeader('content-type') || '').toLowerCase();
-          if (!ct || CAPTURE_TEXT.test(ct)) {
-            var t = '';
-            try { t = xhr.responseText || ''; } catch(e) {}
-            if (t.length > CAPTURE_LIMIT) t = t.slice(0, CAPTURE_LIMIT);
-            captureReal(_url, _method, xhr.status, t, reqBody);
+      if (rule && !rule.redirectUrl) {
+        const mockBody = rule.pagination && rule.pagination.enabled
+          ? applyPagination(rule.pagination, _url, rule.responseBody ?? '')
+          : (rule.responseBody ?? '');
+
+        setTimeout(() => {
+          const props = {
+            readyState:   4,
+            status:       rule.statusCode || 200,
+            statusText:   'Mocked',
+            responseText: mockBody,
+            response:     mockBody,
+          };
+          for (const [k, v] of Object.entries(props)) {
+            try { Object.defineProperty(xhr, k, { get: () => v, configurable: true }); } catch {}
           }
-        }, { once: true });
-        return origSend(body);
+          xhr.dispatchEvent(new Event('readystatechange'));
+          xhr.dispatchEvent(new ProgressEvent('load', { loaded: 1, total: 1 }));
+          if (typeof xhr.onreadystatechange === 'function') xhr.onreadystatechange.call(xhr);
+          if (typeof xhr.onload === 'function') xhr.onload.call(xhr);
+        }, rule.delay ?? 0);
+        return;
       }
 
-      const mockBody = rule.pagination && rule.pagination.enabled
-        ? applyPagination(rule.pagination, _url, rule.responseBody ?? '')
-        : (rule.responseBody ?? '');
-
-      setTimeout(() => {
-        const props = {
-          readyState:   4,
-          status:       rule.statusCode || 200,
-          statusText:   'Mocked',
-          responseText: mockBody,
-          response:     mockBody,
-        };
-        for (const [k, v] of Object.entries(props)) {
-          try { Object.defineProperty(xhr, k, { get: () => v, configurable: true }); } catch {}
+      // No rule or redirect rule — make the real request
+      if (!rule) {
+        _ih.forEach(h => { try { xhr.setRequestHeader(h.name, h.value); } catch {} });
+      }
+      if (rule && rule.redirectUrl) {
+        origOpen(_method, rule.redirectUrl, true); // re-open with the alternate URL
+      }
+      xhr.addEventListener('load', function() {
+        var ct = (xhr.getResponseHeader('content-type') || '').toLowerCase();
+        if (!ct || CAPTURE_TEXT.test(ct)) {
+          var t = '';
+          try { t = xhr.responseText || ''; } catch(e) {}
+          if (t.length > CAPTURE_LIMIT) t = t.slice(0, CAPTURE_LIMIT);
+          captureReal(origUrlForCapture, _method, xhr.status, t, reqBody);
         }
-        xhr.dispatchEvent(new Event('readystatechange'));
-        xhr.dispatchEvent(new ProgressEvent('load', { loaded: 1, total: 1 }));
-        if (typeof xhr.onreadystatechange === 'function') xhr.onreadystatechange.call(xhr);
-        if (typeof xhr.onload === 'function') xhr.onload.call(xhr);
-      }, rule.delay ?? 0);
+      }, { once: true });
+      return origSend(body);
     };
 
     return xhr;
