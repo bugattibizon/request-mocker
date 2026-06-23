@@ -238,14 +238,22 @@
   function PatchedXHR() {
     const xhr = new _XHR();
     let _method = 'GET', _url = '';
+    let _xhrHeaders = []; // headers set by app via setRequestHeader — needed for redirect replay
 
-    const origOpen = xhr.open.bind(xhr);
-    const origSend = xhr.send.bind(xhr);
+    const origOpen             = xhr.open.bind(xhr);
+    const origSend             = xhr.send.bind(xhr);
+    const origSetRequestHeader = xhr.setRequestHeader.bind(xhr);
 
     xhr.open = function(method, url, ...rest) {
-      _method = (method || 'GET').toUpperCase();
-      _url    = url || '';
+      _method     = (method || 'GET').toUpperCase();
+      _url        = url || '';
+      _xhrHeaders = []; // reset on each open
       return origOpen(method, url, ...rest);
+    };
+
+    xhr.setRequestHeader = function(name, value) {
+      _xhrHeaders.push([name, value]); // remember for redirect replay
+      return origSetRequestHeader(name, value);
     };
 
     xhr.send = function(body) {
@@ -283,7 +291,12 @@
         _ih.forEach(h => { try { xhr.setRequestHeader(h.name, h.value); } catch {} });
       }
       if (rule && rule.redirectUrl) {
-        origOpen(_method, rule.redirectUrl, true); // re-open with the alternate URL
+        // origOpen() resets the XHR and clears all headers set via setRequestHeader().
+        // Re-open with the redirect URL then replay saved headers so auth tokens survive.
+        origOpen(_method, rule.redirectUrl, true);
+        _xhrHeaders.forEach(([name, value]) => {
+          try { origSetRequestHeader(name, value); } catch(e) {}
+        });
       }
       xhr.addEventListener('load', function() {
         var ct = (xhr.getResponseHeader('content-type') || '').toLowerCase();
