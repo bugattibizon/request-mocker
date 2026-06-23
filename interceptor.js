@@ -196,8 +196,12 @@
     const rule = match(url, method, matchBody);
     if (rule && !rule.redirectUrl) return mockResponse(rule, url);
 
-    // Either a redirect rule or no matching rule — make the real request
-    const targetInput = (rule && rule.redirectUrl) ? rule.redirectUrl : input;
+    // Either a redirect rule or no matching rule — make the real request.
+    // When input is a Request object, new Request(url, input) copies all its properties
+    // (headers, credentials, body, etc.) to the new URL so auth is preserved.
+    const targetInput = (rule && rule.redirectUrl)
+      ? (input instanceof Request ? new Request(rule.redirectUrl, input) : rule.redirectUrl)
+      : input;
     if (!rule && _ih.length) {
       const headers = new Headers(init.headers || {});
       _ih.forEach(h => headers.set(h.name, h.value));
