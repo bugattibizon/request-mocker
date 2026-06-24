@@ -63,6 +63,9 @@
 
     var bm = state.branchMode || {};
     _branch = (state.enabled && bm.enabled && bm.from && bm.to) ? parseBranch(bm.from, bm.to) : null;
+    try {
+      if (_branch) console.debug('[RequestMocker] Branch Mode active:', _branch.fromHost, '→', _branch.toOrigin);
+    } catch (e) {}
   }
 
   // Normalise the Branch Mode host pair into { fromHost, toOrigin }.
