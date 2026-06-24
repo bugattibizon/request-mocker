@@ -169,6 +169,22 @@
     } catch(e) { return bodyStr; }
   }
 
+  // ── Redirect target ─────────────────────────────────────────────────────────
+  // Build the URL to redirect to. If the configured redirect URL has no query of
+  // its own, carry over the ORIGINAL request's query string — so a pattern like
+  // ".../senders" (no query) redirects page=1, page=2, … correctly instead of
+  // always hitting the hard-coded query in the redirect URL.
+  function buildRedirectTarget(redirectUrl, originalUrl) {
+    try {
+      var o = new URL(originalUrl, location.href);
+      var t = new URL(redirectUrl, location.href);
+      if (!t.search && o.search) t.search = o.search;
+      return t.href;
+    } catch (e) {
+      return redirectUrl;
+    }
+  }
+
   // ── Mock response ──────────────────────────────────────────────────────────
   async function mockResponse(rule, url) {
     if (rule.delay > 0) await new Promise(r => setTimeout(r, rule.delay));
@@ -199,7 +215,7 @@
     // Either a redirect rule or no matching rule — make the real request.
     let finalInput = input;
     if (rule && rule.redirectUrl) {
-      finalInput = rule.redirectUrl;
+      finalInput = buildRedirectTarget(rule.redirectUrl, url);
       // Always merge headers from BOTH the Request object and init into a plain
       // Headers object, so auth headers survive regardless of how fetch was called.
       const headers = new Headers();
@@ -218,7 +234,7 @@
                      : (input instanceof Request ? input.body : init.body),
         headers,
       };
-      try { console.debug('[RequestMocker] redirect fetch', method, url, '→', rule.redirectUrl, 'headers:', [...headers.keys()]); } catch(e) {}
+      try { console.debug('[RequestMocker] redirect fetch', method, url, '→', finalInput, 'headers:', [...headers.keys()]); } catch(e) {}
     } else if (!rule && _ih.length) {
       const headers = new Headers(init.headers || {});
       _ih.forEach(h => headers.set(h.name, h.value));
@@ -298,11 +314,12 @@
       if (rule && rule.redirectUrl) {
         // origOpen() resets the XHR and clears all headers set via setRequestHeader().
         // Re-open with the redirect URL then replay saved headers so auth tokens survive.
-        origOpen(_method, rule.redirectUrl, true);
+        var redirectTarget = buildRedirectTarget(rule.redirectUrl, _url);
+        origOpen(_method, redirectTarget, true);
         _xhrHeaders.forEach(([name, value]) => {
           try { origSetRequestHeader(name, value); } catch(e) {}
         });
-        try { console.debug('[RequestMocker] redirect xhr', _method, origUrlForCapture, '→', rule.redirectUrl, 'headers:', _xhrHeaders.map(h => h[0])); } catch(e) {}
+        try { console.debug('[RequestMocker] redirect xhr', _method, origUrlForCapture, '→', redirectTarget, 'headers:', _xhrHeaders.map(h => h[0])); } catch(e) {}
       }
       xhr.addEventListener('load', function() {
         var ct = (xhr.getResponseHeader('content-type') || '').toLowerCase();
