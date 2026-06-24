@@ -64,7 +64,7 @@
     var bm = state.branchMode || {};
     _branch = (state.enabled && bm.enabled && bm.from && bm.to) ? parseBranch(bm.from, bm.to) : null;
     try {
-      if (_branch) console.debug('[RequestMocker] Branch Mode active:', _branch.fromHost, '→', _branch.toOrigin);
+      if (_branch) console.log('[RequestMocker] Branch Mode active:', _branch.fromHost, '→', _branch.toOrigin);
     } catch (e) {}
   }
 
@@ -278,7 +278,7 @@
                      : (input instanceof Request ? input.body : init.body),
         headers,
       };
-      try { console.debug('[RequestMocker] redirect fetch', method, url, '→', finalInput, 'headers:', [...headers.keys()]); } catch(e) {}
+      try { console.log('[RequestMocker] redirect fetch', method, url, '→', finalInput, 'headers:', [...headers.keys()]); } catch(e) {}
     } else if (!rule && _ih.length) {
       const headers = new Headers(init.headers || {});
       _ih.forEach(h => headers.set(h.name, h.value));
@@ -363,7 +363,7 @@
         _xhrHeaders.forEach(([name, value]) => {
           try { origSetRequestHeader(name, value); } catch(e) {}
         });
-        try { console.debug('[RequestMocker] redirect xhr', _method, origUrlForCapture, '→', redirectTarget, 'headers:', _xhrHeaders.map(h => h[0])); } catch(e) {}
+        try { console.log('[RequestMocker] redirect xhr', _method, origUrlForCapture, '→', redirectTarget, 'headers:', _xhrHeaders.map(h => h[0])); } catch(e) {}
       } else if (!rule) {
         // No redirect — apply inject headers to the real request.
         _ih.forEach(h => { try { xhr.setRequestHeader(h.name, h.value); } catch {} });
@@ -386,4 +386,6 @@
   PatchedXHR.prototype = _XHR.prototype;
   Object.assign(PatchedXHR, _XHR);
   window.XMLHttpRequest = PatchedXHR;
+
+  try { console.log('[RequestMocker] interceptor injected (Branch Mode build)'); } catch (e) {}
 })();
