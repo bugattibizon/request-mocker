@@ -170,14 +170,24 @@
   }
 
   // ── Redirect target ─────────────────────────────────────────────────────────
-  // Build the URL to redirect to. If the configured redirect URL has no query of
-  // its own, carry over the ORIGINAL request's query string — so a pattern like
-  // ".../senders" (no query) redirects page=1, page=2, … correctly instead of
-  // always hitting the hard-coded query in the redirect URL.
+  // Build the URL to redirect to. Two modes:
+  //
+  //  • Host-swap: the redirect URL is just an origin (no path), e.g.
+  //    "https://cf-9792-api.warmy.io". Keep the ORIGINAL request's path + query and
+  //    swap only the scheme/host/port. One broad rule (Method=ANY, pattern matching
+  //    the whole host) can then reroute an entire API — login included — to another
+  //    backend, so auth stays consistent on the target.
+  //
+  //  • Endpoint: the redirect URL has its own path, e.g. ".../senders". Use it, and
+  //    carry over the original query string when the redirect URL has none of its own
+  //    (so page=1, page=2, … keep working).
   function buildRedirectTarget(redirectUrl, originalUrl) {
     try {
       var o = new URL(originalUrl, location.href);
       var t = new URL(redirectUrl, location.href);
+      if (t.pathname === '/' && !t.search) {
+        return t.origin + o.pathname + o.search + o.hash;
+      }
       if (!t.search && o.search) t.search = o.search;
       return t.href;
     } catch (e) {
