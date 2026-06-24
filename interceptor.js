@@ -200,20 +200,25 @@
     let finalInput = input;
     if (rule && rule.redirectUrl) {
       finalInput = rule.redirectUrl;
+      // Always merge headers from BOTH the Request object and init into a plain
+      // Headers object, so auth headers survive regardless of how fetch was called.
+      const headers = new Headers();
       if (input instanceof Request) {
-        // fetch(new Request(url, opts)) stores everything on the Request, not in init.
-        // Copy headers/credentials from it so auth tokens are preserved on redirect.
-        const headers = new Headers();
         try { input.headers.forEach((v, k) => headers.set(k, v)); } catch(e) {}
-        if (init.headers) new Headers(init.headers).forEach((v, k) => headers.set(k, v));
-        init = {
-          method:      init.method      !== undefined ? init.method      : input.method,
-          credentials: init.credentials !== undefined ? init.credentials : input.credentials,
-          cache:       init.cache       !== undefined ? init.cache       : input.cache,
-          body:        init.body        !== undefined ? init.body        : input.body,
-          headers,
-        };
       }
+      if (init.headers) {
+        try { new Headers(init.headers).forEach((v, k) => headers.set(k, v)); } catch(e) {}
+      }
+      init = {
+        method:      init.method      !== undefined ? init.method
+                     : (input instanceof Request ? input.method : init.method),
+        cache:       init.cache       !== undefined ? init.cache
+                     : (input instanceof Request ? input.cache : init.cache),
+        body:        init.body        !== undefined ? init.body
+                     : (input instanceof Request ? input.body : init.body),
+        headers,
+      };
+      try { console.debug('[RequestMocker] redirect fetch', method, url, '→', rule.redirectUrl, 'headers:', [...headers.keys()]); } catch(e) {}
     } else if (!rule && _ih.length) {
       const headers = new Headers(init.headers || {});
       _ih.forEach(h => headers.set(h.name, h.value));
@@ -297,6 +302,7 @@
         _xhrHeaders.forEach(([name, value]) => {
           try { origSetRequestHeader(name, value); } catch(e) {}
         });
+        try { console.debug('[RequestMocker] redirect xhr', _method, origUrlForCapture, '→', rule.redirectUrl, 'headers:', _xhrHeaders.map(h => h[0])); } catch(e) {}
       }
       xhr.addEventListener('load', function() {
         var ct = (xhr.getResponseHeader('content-type') || '').toLowerCase();
