@@ -11,6 +11,7 @@ var rules = [];
 var enabled = true;
 var editId = null;
 var injectHeaders = [];
+var branchMode = { enabled: false, from: '', to: '' };
 var responseHeaderRows = [];
 var darkTheme = false;
 var editorSource = 'response';
@@ -105,10 +106,11 @@ document.addEventListener('click', function(e) {
 
 // ── Storage ──────────────────────────────────────────────────────────────────
 function load(cb) {
-  chrome.storage.local.get({ rules: [], enabled: true, injectHeaders: [], darkTheme: false, pendingImport: null }, function(d) {
+  chrome.storage.local.get({ rules: [], enabled: true, injectHeaders: [], branchMode: { enabled: false, from: '', to: '' }, darkTheme: false, pendingImport: null }, function(d) {
     rules         = d.rules;
     enabled       = d.enabled;
     injectHeaders = d.injectHeaders;
+    branchMode    = d.branchMode || { enabled: false, from: '', to: '' };
     darkTheme     = d.darkTheme;
     applyTheme();
     if (cb) cb(d.pendingImport);
@@ -116,6 +118,7 @@ function load(cb) {
 }
 function save(cb) { chrome.storage.local.set({ rules: rules, enabled: enabled }, cb); }
 function saveHeaders() { chrome.storage.local.set({ injectHeaders: injectHeaders }); updateCount(); }
+function saveBranch() { chrome.storage.local.set({ branchMode: branchMode }); updateCount(); }
 
 function readPaginationConfig() {
   return {
@@ -227,12 +230,23 @@ function renderResponseHeaders() {
 // ── Views ─────────────────────────────────────────────────────────────────────
 function applyActiveTab() {
   var activeTab = document.querySelector('.hdr-tab.active');
-  var isHeaders = activeTab && activeTab.dataset.lt === 'headers';
-  $('ruleList').style.display     = isHeaders ? 'none' : '';
+  var lt        = activeTab ? activeTab.dataset.lt : 'rules';
+  var isHeaders = lt === 'headers';
+  var isBranch  = lt === 'branch';
+  var isRules   = lt === 'rules';
+  $('ruleList').style.display     = isRules   ? ''     : 'none';
   $('ihPanel').style.display      = isHeaders ? 'flex' : 'none';
-  $('btnAdd').style.display        = isHeaders ? 'none' : '';
-  $('btnAddHeader').style.display  = isHeaders ? '' : 'none';
+  $('branchPanel').style.display  = isBranch  ? 'block': 'none';
+  $('btnAdd').style.display        = isRules   ? ''     : 'none';
+  $('btnAddHeader').style.display  = isHeaders ? ''     : 'none';
   if (isHeaders) renderHeaders();
+  if (isBranch)  renderBranch();
+}
+
+function renderBranch() {
+  $('bmEnabled').checked = !!branchMode.enabled;
+  $('bmFrom').value      = branchMode.from || '';
+  $('bmTo').value        = branchMode.to   || '';
 }
 
 function showList() {
@@ -301,6 +315,7 @@ function updateCount() {
   var activeIH    = injectHeaders.filter(function(h) { return h.enabled; }).length;
   $('countRules').textContent   = rules.length         ? activeRules + '/' + rules.length         : '';
   $('countHeaders').textContent = injectHeaders.length  ? activeIH   + '/' + injectHeaders.length  : '';
+  $('countBranch').textContent  = (branchMode.enabled && branchMode.from && branchMode.to) ? 'on' : '';
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
@@ -521,6 +536,19 @@ $('fPagEnabled').addEventListener('change', function() {
 });
 ['fPagPages','fPagPageParam','fPagPath'].forEach(function(id) {
   $(id).addEventListener('input', autoSave);
+});
+
+// Branch Mode wiring
+$('bmEnabled').addEventListener('change', function() {
+  branchMode.enabled = this.checked;
+  saveBranch();
+});
+['bmFrom','bmTo'].forEach(function(id) {
+  $(id).addEventListener('input', function() {
+    branchMode.from = $('bmFrom').value.trim();
+    branchMode.to   = $('bmTo').value.trim();
+    saveBranch();
+  });
 });
 
 // Inline body editor

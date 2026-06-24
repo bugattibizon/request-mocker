@@ -9,6 +9,7 @@
   let _rules    = [];    // enabled rules with normalised/pre-compiled fields
   let _ih       = [];    // enabled inject-headers with non-empty names
   let _needBody = false; // true if any rule matches on requestBody
+  let _branch   = null;  // { fromHost, toOrigin } when Branch Mode is enabled
 
   const STRIP = new Set([
     'content-encoding', 'transfer-encoding', 'content-length',
@@ -59,6 +60,31 @@
 
     _ih       = state.enabled ? (state.injectHeaders || []).filter(h => h.enabled && h.name) : [];
     _needBody = _rules.some(r => r._body);
+
+    var bm = state.branchMode || {};
+    _branch = (state.enabled && bm.enabled && bm.from && bm.to) ? parseBranch(bm.from, bm.to) : null;
+  }
+
+  // Normalise the Branch Mode host pair into { fromHost, toOrigin }.
+  function parseBranch(from, to) {
+    try {
+      var f = new URL(/^https?:\/\//.test(from) ? from : 'https://' + from);
+      var t = new URL(/^https?:\/\//.test(to)   ? to   : 'https://' + to);
+      return { fromHost: f.hostname, toOrigin: t.origin };
+    } catch (e) { return null; }
+  }
+
+  // If Branch Mode applies to this URL, return the host-swapped target (path+query
+  // preserved); otherwise null.
+  function branchTarget(url) {
+    if (!_branch) return null;
+    try {
+      var u = new URL(url, location.href);
+      if (u.hostname === _branch.fromHost) {
+        return _branch.toOrigin + u.pathname + u.search + u.hash;
+      }
+    } catch (e) {}
+    return null;
   }
 
   function safeRegExp(pattern) {
@@ -222,12 +248,17 @@
     const rule = match(url, method, matchBody);
     if (rule && !rule.redirectUrl) return mockResponse(rule, url);
 
-    // Either a redirect rule or no matching rule — make the real request.
+    // Decide the redirect target: an explicit redirect rule wins; otherwise Branch
+    // Mode (host-swap) applies when no mock rule matched.
+    const redirectTo = (rule && rule.redirectUrl)
+      ? buildRedirectTarget(rule.redirectUrl, url)
+      : (!rule ? branchTarget(url) : null);
+
     let finalInput = input;
-    if (rule && rule.redirectUrl) {
-      finalInput = buildRedirectTarget(rule.redirectUrl, url);
-      // Always merge headers from BOTH the Request object and init into a plain
-      // Headers object, so auth headers survive regardless of how fetch was called.
+    if (redirectTo) {
+      finalInput = redirectTo;
+      // Merge headers from BOTH the Request object and init into a plain Headers
+      // object, so auth headers survive regardless of how fetch was called.
       const headers = new Headers();
       if (input instanceof Request) {
         try { input.headers.forEach((v, k) => headers.set(k, v)); } catch(e) {}
@@ -317,19 +348,22 @@
         return;
       }
 
-      // No rule or redirect rule — make the real request
-      if (!rule) {
-        _ih.forEach(h => { try { xhr.setRequestHeader(h.name, h.value); } catch {} });
-      }
-      if (rule && rule.redirectUrl) {
+      // Decide the redirect target: explicit redirect rule wins, else Branch Mode.
+      var redirectTarget = (rule && rule.redirectUrl)
+        ? buildRedirectTarget(rule.redirectUrl, _url)
+        : (!rule ? branchTarget(_url) : null);
+
+      if (redirectTarget) {
         // origOpen() resets the XHR and clears all headers set via setRequestHeader().
         // Re-open with the redirect URL then replay saved headers so auth tokens survive.
-        var redirectTarget = buildRedirectTarget(rule.redirectUrl, _url);
         origOpen(_method, redirectTarget, true);
         _xhrHeaders.forEach(([name, value]) => {
           try { origSetRequestHeader(name, value); } catch(e) {}
         });
         try { console.debug('[RequestMocker] redirect xhr', _method, origUrlForCapture, '→', redirectTarget, 'headers:', _xhrHeaders.map(h => h[0])); } catch(e) {}
+      } else if (!rule) {
+        // No redirect — apply inject headers to the real request.
+        _ih.forEach(h => { try { xhr.setRequestHeader(h.name, h.value); } catch {} });
       }
       xhr.addEventListener('load', function() {
         var ct = (xhr.getResponseHeader('content-type') || '').toLowerCase();

@@ -341,6 +341,7 @@ body.dark .jp { color:var(--text-sec); }
   <div class="hdr-tabs">
     <button type="button" class="hdr-tab active" data-lt="rules">Mock Rules<span class="tab-count" id="countRules"></span></button>
     <button type="button" class="hdr-tab" data-lt="headers">Inject Headers<span class="tab-count" id="countHeaders"></span></button>
+    <button type="button" class="hdr-tab" data-lt="branch">Branch Mode<span class="tab-count" id="countBranch"></span></button>
   </div>
   <button type="button" class="icon-btn" id="btnTheme" title="Toggle dark mode" style="padding:5px 7px;display:flex;align-items:center"></button>
   <label class="toggle" title="Enable / disable all mocks">
@@ -358,6 +359,30 @@ body.dark .jp { color:var(--text-sec); }
     </div>
   </div>
   <div class="ih-panel" id="ihPanel" style="display:none"></div>
+  <div class="branch-panel" id="branchPanel" style="display:none">
+    <div style="padding:16px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <label class="toggle toggle-sm">
+          <input type="checkbox" id="bmEnabled">
+          <span class="track"></span>
+        </label>
+        <span style="font-size:13px;font-weight:600">Redirect a whole backend to another host</span>
+      </div>
+      <div class="field">
+        <label class="label">From host</label>
+        <input type="text" id="bmFrom" placeholder="test-api.warmy.io">
+      </div>
+      <div style="text-align:center;color:var(--text-dim);font-size:18px;line-height:1">↓</div>
+      <div class="field">
+        <label class="label">To host</label>
+        <input type="text" id="bmTo" placeholder="cf-9792-api.warmy.io">
+      </div>
+      <div style="font-size:11px;color:var(--text-dim);line-height:1.6;border-top:1px solid var(--border);padding-top:12px">
+        Every fetch/XHR request to <b>From host</b> (any method) is rerouted to <b>To host</b> — path, query and headers are preserved. <b>Mock Rules take precedence.</b><br><br>
+        💡 Enable this first, then log in again so authentication happens against the target backend.
+      </div>
+    </div>
+  </div>
   <div class="footer">
     <button class="btn btn-primary" id="btnAdd">+ Add Rule</button>
     <button class="btn btn-primary" id="btnAddHeader" style="display:none">+ Add Header</button>
