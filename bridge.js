@@ -7,7 +7,12 @@ function sync() {
 }
 
 sync();
-chrome.storage.onChanged.addListener(sync);
+// Re-sync only when config actually changes. Ignore transient keys like
+// lastCapture (written on every captured request) to avoid a re-sync storm
+// that rebuilds the interceptor caches on every request.
+chrome.storage.onChanged.addListener(function(changes) {
+  if (changes.rules || changes.enabled || changes.injectHeaders || changes.branchMode) sync();
+});
 
 // Forward real-request captures from the interceptor (MAIN world) to storage.
 // postMessage is used because CustomEvent.detail from the MAIN world arrives as a
