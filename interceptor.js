@@ -54,7 +54,6 @@
           delay:        r.delay,
           _headers:     hdrs,
           pagination:   r.pagination,
-          redirectUrl:  (r.redirectUrl || '').trim(),
         };
       });
 
@@ -63,9 +62,6 @@
 
     var bm = state.branchMode || {};
     _branch = (state.enabled && bm.enabled && bm.from && bm.to) ? parseBranch(bm.from, bm.to) : null;
-    try {
-      if (_branch) console.log('[RequestMocker] Branch Mode active:', _branch.fromHost, '→', _branch.toOrigin);
-    } catch (e) {}
   }
 
   // Normalise the Branch Mode host pair into { fromHost, toOrigin }.
@@ -198,32 +194,6 @@
     } catch(e) { return bodyStr; }
   }
 
-  // ── Redirect target ─────────────────────────────────────────────────────────
-  // Build the URL to redirect to. Two modes:
-  //
-  //  • Host-swap: the redirect URL is just an origin (no path), e.g.
-  //    "https://cf-9792-api.warmy.io". Keep the ORIGINAL request's path + query and
-  //    swap only the scheme/host/port. One broad rule (Method=ANY, pattern matching
-  //    the whole host) can then reroute an entire API — login included — to another
-  //    backend, so auth stays consistent on the target.
-  //
-  //  • Endpoint: the redirect URL has its own path, e.g. ".../senders". Use it, and
-  //    carry over the original query string when the redirect URL has none of its own
-  //    (so page=1, page=2, … keep working).
-  function buildRedirectTarget(redirectUrl, originalUrl) {
-    try {
-      var o = new URL(originalUrl, location.href);
-      var t = new URL(redirectUrl, location.href);
-      if (t.pathname === '/' && !t.search) {
-        return t.origin + o.pathname + o.search + o.hash;
-      }
-      if (!t.search && o.search) t.search = o.search;
-      return t.href;
-    } catch (e) {
-      return redirectUrl;
-    }
-  }
-
   // ── Mock response ──────────────────────────────────────────────────────────
   async function mockResponse(rule, url) {
     if (rule.delay > 0) await new Promise(r => setTimeout(r, rule.delay));
@@ -249,13 +219,10 @@
     const matchBody = _needBody ? reqBody : '';
 
     const rule = match(url, method, matchBody);
-    if (rule && !rule.redirectUrl) return mockResponse(rule, url);
+    if (rule) return mockResponse(rule, url);
 
-    // Decide the redirect target: an explicit redirect rule wins; otherwise Branch
-    // Mode (host-swap) applies when no mock rule matched.
-    const redirectTo = (rule && rule.redirectUrl)
-      ? buildRedirectTarget(rule.redirectUrl, url)
-      : (!rule ? branchTarget(url) : null);
+    // No mock rule matched. Branch Mode (host-swap) may reroute the request.
+    const redirectTo = branchTarget(url);
 
     let finalInput = input;
     if (redirectTo) {
@@ -278,8 +245,7 @@
                      : (input instanceof Request ? input.body : init.body),
         headers,
       };
-      try { console.log('[RequestMocker] redirect fetch', method, url, '→', finalInput, 'headers:', [...headers.keys()]); } catch(e) {}
-    } else if (!rule && _ih.length) {
+    } else if (_ih.length) {
       const headers = new Headers(init.headers || {});
       _ih.forEach(h => headers.set(h.name, h.value));
       init = { ...init, headers };
@@ -327,7 +293,7 @@
       const rule             = match(_url, _method, b);
       const origUrlForCapture = _url; // keep original URL for DevTools capture
 
-      if (rule && !rule.redirectUrl) {
+      if (rule) {
         const mockBody = rule.pagination && rule.pagination.enabled
           ? applyPagination(rule.pagination, _url, rule.responseBody ?? '')
           : (rule.responseBody ?? '');
@@ -351,10 +317,8 @@
         return;
       }
 
-      // Decide the redirect target: explicit redirect rule wins, else Branch Mode.
-      var redirectTarget = (rule && rule.redirectUrl)
-        ? buildRedirectTarget(rule.redirectUrl, _url)
-        : (!rule ? branchTarget(_url) : null);
+      // No mock rule matched. Branch Mode (host-swap) may reroute the request.
+      var redirectTarget = branchTarget(_url);
 
       if (redirectTarget) {
         // origOpen() resets the XHR and clears all headers set via setRequestHeader().
@@ -363,8 +327,7 @@
         _xhrHeaders.forEach(([name, value]) => {
           try { origSetRequestHeader(name, value); } catch(e) {}
         });
-        try { console.log('[RequestMocker] redirect xhr', _method, origUrlForCapture, '→', redirectTarget, 'headers:', _xhrHeaders.map(h => h[0])); } catch(e) {}
-      } else if (!rule) {
+      } else {
         // No redirect — apply inject headers to the real request.
         _ih.forEach(h => { try { xhr.setRequestHeader(h.name, h.value); } catch {} });
       }
@@ -386,6 +349,4 @@
   PatchedXHR.prototype = _XHR.prototype;
   Object.assign(PatchedXHR, _XHR);
   window.XMLHttpRequest = PatchedXHR;
-
-  try { console.log('[RequestMocker] interceptor injected (Branch Mode build)'); } catch (e) {}
 })();

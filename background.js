@@ -8,7 +8,9 @@ function updateBadge(data) {
   }
   const activeRules   = (data.rules         || []).filter(r => r.enabled).length;
   const activeHeaders = (data.injectHeaders  || []).filter(h => h.enabled).length;
-  const total = activeRules + activeHeaders;
+  const bm            = data.branchMode || {};
+  const activeBranch  = (bm.enabled && bm.from && bm.to) ? 1 : 0;
+  const total = activeRules + activeHeaders + activeBranch;
   if (total > 0) {
     chrome.action.setBadgeText({ text: String(total) });
     chrome.action.setBadgeBackgroundColor({ color: '#1090D4' });
@@ -19,7 +21,7 @@ function updateBadge(data) {
 
 // Runs once on install — seeds storage with empty defaults.
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.storage.local.get({ rules: [], enabled: true, injectHeaders: [] }, (data) => {
+  chrome.storage.local.get({ rules: [], enabled: true, injectHeaders: [], branchMode: { enabled: false, from: '', to: '' } }, (data) => {
     chrome.storage.local.set({ rules: data.rules, enabled: data.enabled, injectHeaders: data.injectHeaders });
     updateBadge(data);
   });
@@ -27,7 +29,7 @@ chrome.runtime.onInstalled.addListener(() => {
 
 // Keep badge in sync with storage changes.
 chrome.storage.onChanged.addListener(() => {
-  chrome.storage.local.get({ rules: [], enabled: true, injectHeaders: [] }, updateBadge);
+  chrome.storage.local.get({ rules: [], enabled: true, injectHeaders: [], branchMode: { enabled: false, from: '', to: '' } }, updateBadge);
 });
 
 // Signal the DevTools panel to clear when the inspected tab navigates.
