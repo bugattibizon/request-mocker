@@ -52,24 +52,63 @@ body {
 /* ── Header ── */
 .header {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 10px;
-  padding: 16px 20px;
-  background: var(--surface);
+  padding: 12px 14px 0;
+  background: #e2e5e9;            /* tab strip — darker than the white active tab */
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
-/* ── Header tabs (pill style) ── */
-.hdr-tabs { display:flex; gap:2px; flex:1; margin:0 12px; }
-.hdr-tab { padding:6px 14px; font-size:12px; font-weight:600; color:var(--text-sec); background:none; border:none; border-radius:20px; cursor:pointer; transition:color .15s,background .15s; }
-.hdr-tab:hover { color:var(--text); background:var(--hover); }
-.hdr-tab.active { color:#1090D4; background:#e3f2fc; }
-body.dark .hdr-tab.active { background:#0d3650; }
+body.dark .header { background: #151515; }
+.header > #btnTheme, .header > .toggle { margin-bottom: 8px; }
 
-.tab-count { display:inline-block; font-size:10px; font-weight:700; padding:1px 6px; border-radius:20px; margin-left:5px; vertical-align:middle; background:var(--hover); color:var(--text-sec); transition:background .15s,color .15s; }
+/* ── Header tabs (Chrome browser style) ── */
+.hdr-tabs { display:flex; align-items:flex-end; gap:1px; flex:1; margin:0 4px; }
+.hdr-tab {
+  position: relative;
+  padding: 8px 18px 9px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-sec);
+  background: transparent;
+  border: none;
+  border-radius: 10px 10px 0 0;
+  cursor: pointer;
+  margin-bottom: -1px;            /* sit on the strip's bottom edge */
+  white-space: nowrap;
+  z-index: 1;
+  transition: background .15s, color .15s;
+}
+.hdr-tab:hover:not(.active) { background: var(--hover); color: var(--text); }
+.hdr-tab.active { color: var(--text); background: var(--surface); z-index: 2; }
+
+/* Chrome-style concave bottom corners on the active tab — they flare the tab
+   out to the baseline, revealing the strip through the quarter-circle cut-out. */
+.hdr-tab.active::before,
+.hdr-tab.active::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  width: 10px;
+  height: 10px;
+  background: var(--surface);
+  pointer-events: none;
+}
+.hdr-tab.active::before {
+  left: -10px;
+  -webkit-mask: radial-gradient(circle at top left, transparent 10px, #000 10.5px);
+          mask: radial-gradient(circle at top left, transparent 10px, #000 10.5px);
+}
+.hdr-tab.active::after {
+  right: -10px;
+  -webkit-mask: radial-gradient(circle at top right, transparent 10px, #000 10.5px);
+          mask: radial-gradient(circle at top right, transparent 10px, #000 10.5px);
+}
+
+.tab-count { display:inline-block; font-size:10px; font-weight:700; padding:1px 6px; border-radius:20px; margin-left:6px; vertical-align:middle; background:var(--hover); color:var(--text-sec); transition:background .15s,color .15s; }
 .tab-count:empty { display:none; }
-.hdr-tab.active .tab-count { background:#cde9f8; color:#1090D4; }
-body.dark .hdr-tab.active .tab-count { background:#0d3650; color:#1090D4; }
+.hdr-tab.active .tab-count { background:#e3f2fc; color:#1090D4; }
+body.dark .hdr-tab.active .tab-count { background:#0d3650; color:#4aa8e0; }
 
 /* ── Toggle switch ── */
 .toggle { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
