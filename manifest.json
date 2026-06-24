@@ -3,7 +3,7 @@
   "name": "Request Mocker",
   "version": "1.0.0",
   "description": "Intercept and mock HTTP requests on any webpage",
-  "permissions": ["storage", "cookies"],
+  "permissions": ["storage"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"
