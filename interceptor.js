@@ -202,18 +202,22 @@
       finalInput = rule.redirectUrl;
       if (input instanceof Request) {
         // fetch(new Request(url, opts)) stores everything on the Request, not in init.
-        // Copy headers/credentials from it so auth tokens are preserved on redirect.
+        // Copy headers from it so any auth headers are preserved on redirect.
         const headers = new Headers();
         try { input.headers.forEach((v, k) => headers.set(k, v)); } catch(e) {}
         if (init.headers) new Headers(init.headers).forEach((v, k) => headers.set(k, v));
         init = {
-          method:      init.method      !== undefined ? init.method      : input.method,
-          credentials: init.credentials !== undefined ? init.credentials : input.credentials,
-          cache:       init.cache       !== undefined ? init.cache       : input.cache,
-          body:        init.body        !== undefined ? init.body        : input.body,
+          method:  init.method !== undefined ? init.method : input.method,
+          cache:   init.cache  !== undefined ? init.cache  : input.cache,
+          body:    init.body   !== undefined ? init.body   : input.body,
           headers,
         };
+      } else {
+        init = { ...init };
       }
+      // Send cookies to the target host. background.js mirrors the source host's
+      // (HttpOnly) session cookie onto the target so this request is authenticated.
+      init.credentials = 'include';
     } else if (!rule && _ih.length) {
       const headers = new Headers(init.headers || {});
       _ih.forEach(h => headers.set(h.name, h.value));
@@ -297,6 +301,8 @@
         _xhrHeaders.forEach(([name, value]) => {
           try { origSetRequestHeader(name, value); } catch(e) {}
         });
+        // Send cookies to the target host (background.js mirrors the source session cookie).
+        try { xhr.withCredentials = true; } catch(e) {}
       }
       xhr.addEventListener('load', function() {
         var ct = (xhr.getResponseHeader('content-type') || '').toLowerCase();
