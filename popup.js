@@ -319,14 +319,17 @@ function render() {
         '<span class="track"></span>' +
       '</label>' +
       '<div class="rule-body">' +
-        '<div class="rule-name">' + esc(rule.name || rule.urlPattern) + '</div>' +
-        '<div class="rule-meta">' +
-          methodBadge(rule.method) + statusBadge(rule.statusCode) +
+        '<div class="rule-top">' +
+          methodBadge(rule.method) +
+          '<span class="rule-name">' + esc(rule.name || rule.urlPattern) + '</span>' +
+          statusBadge(rule.statusCode) +
+        '</div>' +
+        '<div class="rule-sub">' +
+          '<span class="rule-url">' + esc(rule.urlPattern) + '</span>' +
           (rule.delay   ? '<span class="meta-text">⏱ ' + rule.delay + 'ms</span>' : '') +
           (rule.isRegex ? '<span class="meta-text">regex</span>' : '') +
           (rule.pagination && rule.pagination.enabled ? '<span class="meta-text">⇌ ' + (rule.pagination.totalPages || '?') + ' pages</span>' : '') +
         '</div>' +
-        '<div class="rule-url">' + esc(rule.urlPattern) + '</div>' +
       '</div>' +
       '<div class="rule-actions">' +
         '<button type="button" class="icon-btn danger dbtn" data-id="' + rule.id + '" title="Delete">' +
