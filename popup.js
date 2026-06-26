@@ -293,6 +293,8 @@ function updateCount() {
   $('countRules').textContent   = rules.length         ? activeRules + '/' + rules.length         : '';
   $('countHeaders').textContent = injectHeaders.length  ? activeIH   + '/' + injectHeaders.length  : '';
   $('countBranch').textContent  = (branchMode.enabled && branchMode.from && branchMode.to) ? 'on' : '';
+  var rs = $('ruleSummary');
+  if (rs) rs.innerHTML = rules.length ? '<b>' + activeRules + '</b> of <b>' + rules.length + '</b> active' : '';
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
@@ -312,7 +314,8 @@ function render() {
   $('empty').style.display = rules.length ? 'none' : '';
   rules.forEach(function(rule) {
     var el = document.createElement('div');
-    el.className = 'rule' + (rule.enabled ? '' : ' disabled');
+    var mcls = ({ GET:'m-GET', POST:'m-POST', PUT:'m-PUT', DELETE:'m-DELETE', PATCH:'m-PATCH' })[rule.method] || 'm-ANY';
+    el.className = 'rule ' + mcls + (rule.enabled ? '' : ' disabled');
     el.innerHTML =
       '<label class="toggle toggle-sm">' +
         '<input type="checkbox" class="rtoggle" data-id="' + rule.id + '"' + (rule.enabled ? ' checked' : '') + '>' +
