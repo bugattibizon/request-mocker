@@ -9,6 +9,7 @@
   let _rules    = [];    // enabled rules with normalised/pre-compiled fields
   let _ih       = [];    // enabled inject-headers with non-empty names
   let _needBody = false; // true if any rule matches on requestBody
+  let _branch   = null;  // { fromHost, toOrigin } when Branch Mode is enabled
 
   const STRIP = new Set([
     'content-encoding', 'transfer-encoding', 'content-length',
@@ -58,6 +59,31 @@
 
     _ih       = state.enabled ? (state.injectHeaders || []).filter(h => h.enabled && h.name) : [];
     _needBody = _rules.some(r => r._body);
+
+    var bm = state.branchMode || {};
+    _branch = (state.enabled && bm.enabled && bm.from && bm.to) ? parseBranch(bm.from, bm.to) : null;
+  }
+
+  // Normalise the Branch Mode host pair into { fromHost, toOrigin }.
+  function parseBranch(from, to) {
+    try {
+      var f = new URL(/^https?:\/\//.test(from) ? from : 'https://' + from);
+      var t = new URL(/^https?:\/\//.test(to)   ? to   : 'https://' + to);
+      return { fromHost: f.hostname, toOrigin: t.origin };
+    } catch (e) { return null; }
+  }
+
+  // If Branch Mode applies to this URL, return the host-swapped target (path+query
+  // preserved); otherwise null.
+  function branchTarget(url) {
+    if (!_branch) return null;
+    try {
+      var u = new URL(url, location.href);
+      if (u.hostname === _branch.fromHost) {
+        return _branch.toOrigin + u.pathname + u.search + u.hash;
+      }
+    } catch (e) {}
+    return null;
   }
 
   function safeRegExp(pattern) {
@@ -195,12 +221,36 @@
     const rule = match(url, method, matchBody);
     if (rule) return mockResponse(rule, url);
 
-    if (_ih.length) {
+    // No mock rule matched. Branch Mode (host-swap) may reroute the request.
+    const redirectTo = branchTarget(url);
+
+    let finalInput = input;
+    if (redirectTo) {
+      finalInput = redirectTo;
+      // Merge headers from BOTH the Request object and init into a plain Headers
+      // object, so auth headers survive regardless of how fetch was called.
+      const headers = new Headers();
+      if (input instanceof Request) {
+        try { input.headers.forEach((v, k) => headers.set(k, v)); } catch(e) {}
+      }
+      if (init.headers) {
+        try { new Headers(init.headers).forEach((v, k) => headers.set(k, v)); } catch(e) {}
+      }
+      init = {
+        method:      init.method      !== undefined ? init.method
+                     : (input instanceof Request ? input.method : init.method),
+        cache:       init.cache       !== undefined ? init.cache
+                     : (input instanceof Request ? input.cache : init.cache),
+        body:        init.body        !== undefined ? init.body
+                     : (input instanceof Request ? input.body : init.body),
+        headers,
+      };
+    } else if (_ih.length) {
       const headers = new Headers(init.headers || {});
       _ih.forEach(h => headers.set(h.name, h.value));
       init = { ...init, headers };
     }
-    const resp = await _fetch.call(this, input, init);
+    const resp = await _fetch.call(this, finalInput, init);
     // Capture real response for the DevTools panel.
     // Clone so the page receives an untouched response.
     const ct = (resp.headers.get('content-type') || '').toLowerCase();
@@ -219,56 +269,78 @@
   function PatchedXHR() {
     const xhr = new _XHR();
     let _method = 'GET', _url = '';
+    let _xhrHeaders = []; // headers set by app via setRequestHeader — needed for redirect replay
 
-    const origOpen = xhr.open.bind(xhr);
-    const origSend = xhr.send.bind(xhr);
+    const origOpen             = xhr.open.bind(xhr);
+    const origSend             = xhr.send.bind(xhr);
+    const origSetRequestHeader = xhr.setRequestHeader.bind(xhr);
 
     xhr.open = function(method, url, ...rest) {
-      _method = (method || 'GET').toUpperCase();
-      _url    = url || '';
+      _method     = (method || 'GET').toUpperCase();
+      _url        = url || '';
+      _xhrHeaders = []; // reset on each open
       return origOpen(method, url, ...rest);
     };
 
-    xhr.send = function(body) {
-      const reqBody = typeof body === 'string' ? body : '';
-      const b       = _needBody ? reqBody : '';
-      const rule    = match(_url, _method, b);
+    xhr.setRequestHeader = function(name, value) {
+      _xhrHeaders.push([name, value]); // remember for redirect replay
+      return origSetRequestHeader(name, value);
+    };
 
-      if (!rule) {
-        _ih.forEach(h => { try { xhr.setRequestHeader(h.name, h.value); } catch {} });
-        // Capture real response for the DevTools panel
-        xhr.addEventListener('load', function() {
-          var ct = (xhr.getResponseHeader('content-type') || '').toLowerCase();
-          if (!ct || CAPTURE_TEXT.test(ct)) {
-            var t = '';
-            try { t = xhr.responseText || ''; } catch(e) {}
-            if (t.length > CAPTURE_LIMIT) t = t.slice(0, CAPTURE_LIMIT);
-            captureReal(_url, _method, xhr.status, t, reqBody);
+    xhr.send = function(body) {
+      const reqBody          = typeof body === 'string' ? body : '';
+      const b                = _needBody ? reqBody : '';
+      const rule             = match(_url, _method, b);
+      const origUrlForCapture = _url; // keep original URL for DevTools capture
+
+      if (rule) {
+        const mockBody = rule.pagination && rule.pagination.enabled
+          ? applyPagination(rule.pagination, _url, rule.responseBody ?? '')
+          : (rule.responseBody ?? '');
+
+        setTimeout(() => {
+          const props = {
+            readyState:   4,
+            status:       rule.statusCode || 200,
+            statusText:   'Mocked',
+            responseText: mockBody,
+            response:     mockBody,
+          };
+          for (const [k, v] of Object.entries(props)) {
+            try { Object.defineProperty(xhr, k, { get: () => v, configurable: true }); } catch {}
           }
-        }, { once: true });
-        return origSend(body);
+          xhr.dispatchEvent(new Event('readystatechange'));
+          xhr.dispatchEvent(new ProgressEvent('load', { loaded: 1, total: 1 }));
+          if (typeof xhr.onreadystatechange === 'function') xhr.onreadystatechange.call(xhr);
+          if (typeof xhr.onload === 'function') xhr.onload.call(xhr);
+        }, rule.delay ?? 0);
+        return;
       }
 
-      const mockBody = rule.pagination && rule.pagination.enabled
-        ? applyPagination(rule.pagination, _url, rule.responseBody ?? '')
-        : (rule.responseBody ?? '');
+      // No mock rule matched. Branch Mode (host-swap) may reroute the request.
+      var redirectTarget = branchTarget(_url);
 
-      setTimeout(() => {
-        const props = {
-          readyState:   4,
-          status:       rule.statusCode || 200,
-          statusText:   'Mocked',
-          responseText: mockBody,
-          response:     mockBody,
-        };
-        for (const [k, v] of Object.entries(props)) {
-          try { Object.defineProperty(xhr, k, { get: () => v, configurable: true }); } catch {}
+      if (redirectTarget) {
+        // origOpen() resets the XHR and clears all headers set via setRequestHeader().
+        // Re-open with the redirect URL then replay saved headers so auth tokens survive.
+        origOpen(_method, redirectTarget, true);
+        _xhrHeaders.forEach(([name, value]) => {
+          try { origSetRequestHeader(name, value); } catch(e) {}
+        });
+      } else {
+        // No redirect — apply inject headers to the real request.
+        _ih.forEach(h => { try { xhr.setRequestHeader(h.name, h.value); } catch {} });
+      }
+      xhr.addEventListener('load', function() {
+        var ct = (xhr.getResponseHeader('content-type') || '').toLowerCase();
+        if (!ct || CAPTURE_TEXT.test(ct)) {
+          var t = '';
+          try { t = xhr.responseText || ''; } catch(e) {}
+          if (t.length > CAPTURE_LIMIT) t = t.slice(0, CAPTURE_LIMIT);
+          captureReal(origUrlForCapture, _method, xhr.status, t, reqBody);
         }
-        xhr.dispatchEvent(new Event('readystatechange'));
-        xhr.dispatchEvent(new ProgressEvent('load', { loaded: 1, total: 1 }));
-        if (typeof xhr.onreadystatechange === 'function') xhr.onreadystatechange.call(xhr);
-        if (typeof xhr.onload === 'function') xhr.onload.call(xhr);
-      }, rule.delay ?? 0);
+      }, { once: true });
+      return origSend(body);
     };
 
     return xhr;

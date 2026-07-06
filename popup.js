@@ -11,6 +11,7 @@ var rules = [];
 var enabled = true;
 var editId = null;
 var injectHeaders = [];
+var branchMode = { enabled: false, from: '', to: '' };
 var responseHeaderRows = [];
 var darkTheme = false;
 var editorSource = 'response';
@@ -105,10 +106,11 @@ document.addEventListener('click', function(e) {
 
 // ── Storage ──────────────────────────────────────────────────────────────────
 function load(cb) {
-  chrome.storage.local.get({ rules: [], enabled: true, injectHeaders: [], darkTheme: false, pendingImport: null }, function(d) {
+  chrome.storage.local.get({ rules: [], enabled: true, injectHeaders: [], branchMode: { enabled: false, from: '', to: '' }, darkTheme: false, pendingImport: null }, function(d) {
     rules         = d.rules;
     enabled       = d.enabled;
     injectHeaders = d.injectHeaders;
+    branchMode    = d.branchMode || { enabled: false, from: '', to: '' };
     darkTheme     = d.darkTheme;
     applyTheme();
     if (cb) cb(d.pendingImport);
@@ -116,6 +118,7 @@ function load(cb) {
 }
 function save(cb) { chrome.storage.local.set({ rules: rules, enabled: enabled }, cb); }
 function saveHeaders() { chrome.storage.local.set({ injectHeaders: injectHeaders }); updateCount(); }
+function saveBranch() { chrome.storage.local.set({ branchMode: branchMode }); updateCount(); }
 
 function readPaginationConfig() {
   return {
@@ -207,12 +210,23 @@ function renderResponseHeaders() {
 // ── Views ─────────────────────────────────────────────────────────────────────
 function applyActiveTab() {
   var activeTab = document.querySelector('.hdr-tab.active');
-  var isHeaders = activeTab && activeTab.dataset.lt === 'headers';
-  $('ruleList').style.display     = isHeaders ? 'none' : '';
+  var lt        = activeTab ? activeTab.dataset.lt : 'rules';
+  var isHeaders = lt === 'headers';
+  var isBranch  = lt === 'branch';
+  var isRules   = lt === 'rules';
+  $('ruleList').style.display     = isRules   ? ''     : 'none';
   $('ihPanel').style.display      = isHeaders ? 'flex' : 'none';
-  $('btnAdd').style.display        = isHeaders ? 'none' : '';
-  $('btnAddHeader').style.display  = isHeaders ? '' : 'none';
+  $('branchPanel').style.display  = isBranch  ? 'block': 'none';
+  $('btnAdd').style.display        = isRules   ? ''     : 'none';
+  $('btnAddHeader').style.display  = isHeaders ? ''     : 'none';
   if (isHeaders) renderHeaders();
+  if (isBranch)  renderBranch();
+}
+
+function renderBranch() {
+  $('bmEnabled').checked = !!branchMode.enabled;
+  $('bmFrom').value      = branchMode.from || '';
+  $('bmTo').value        = branchMode.to   || '';
 }
 
 function showList() {
@@ -278,6 +292,9 @@ function updateCount() {
   var activeIH    = injectHeaders.filter(function(h) { return h.enabled; }).length;
   $('countRules').textContent   = rules.length         ? activeRules + '/' + rules.length         : '';
   $('countHeaders').textContent = injectHeaders.length  ? activeIH   + '/' + injectHeaders.length  : '';
+  $('countBranch').textContent  = (branchMode.enabled && branchMode.from && branchMode.to) ? 'on' : '';
+  var rs = $('ruleSummary');
+  if (rs) rs.innerHTML = rules.length ? '<b>' + activeRules + '</b> of <b>' + rules.length + '</b> active' : '';
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
@@ -297,23 +314,27 @@ function render() {
   $('empty').style.display = rules.length ? 'none' : '';
   rules.forEach(function(rule) {
     var el = document.createElement('div');
-    el.className = 'rule' + (rule.enabled ? '' : ' disabled');
+    var mcls = ({ GET:'m-GET', POST:'m-POST', PUT:'m-PUT', DELETE:'m-DELETE', PATCH:'m-PATCH' })[rule.method] || 'm-ANY';
+    el.className = 'rule ' + mcls + (rule.enabled ? '' : ' disabled');
     el.innerHTML =
       '<label class="toggle toggle-sm">' +
         '<input type="checkbox" class="rtoggle" data-id="' + rule.id + '"' + (rule.enabled ? ' checked' : '') + '>' +
         '<span class="track"></span>' +
       '</label>' +
       '<div class="rule-body">' +
-        '<div class="rule-name">' + esc(rule.name || rule.urlPattern) + '</div>' +
-        '<div class="rule-meta">' +
-          methodBadge(rule.method) + statusBadge(rule.statusCode) +
+        '<div class="rule-top">' +
+          methodBadge(rule.method) +
+          '<span class="rule-name">' + esc(rule.name || rule.urlPattern) + '</span>' +
+        '</div>' +
+        '<div class="rule-sub">' +
+          '<span class="rule-url">' + esc(rule.urlPattern) + '</span>' +
           (rule.delay   ? '<span class="meta-text">⏱ ' + rule.delay + 'ms</span>' : '') +
           (rule.isRegex ? '<span class="meta-text">regex</span>' : '') +
           (rule.pagination && rule.pagination.enabled ? '<span class="meta-text">⇌ ' + (rule.pagination.totalPages || '?') + ' pages</span>' : '') +
         '</div>' +
-        '<div class="rule-url">' + esc(rule.urlPattern) + '</div>' +
       '</div>' +
       '<div class="rule-actions">' +
+        statusBadge(rule.statusCode) +
         '<button type="button" class="icon-btn danger dbtn" data-id="' + rule.id + '" title="Delete">' +
           '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>' +
         '</button>' +
@@ -495,6 +516,19 @@ $('fPagEnabled').addEventListener('change', function() {
 });
 ['fPagPages','fPagPageParam','fPagPath'].forEach(function(id) {
   $(id).addEventListener('input', autoSave);
+});
+
+// Branch Mode wiring
+$('bmEnabled').addEventListener('change', function() {
+  branchMode.enabled = this.checked;
+  saveBranch();
+});
+['bmFrom','bmTo'].forEach(function(id) {
+  $(id).addEventListener('input', function() {
+    branchMode.from = $('bmFrom').value.trim();
+    branchMode.to   = $('bmTo').value.trim();
+    saveBranch();
+  });
 });
 
 // Inline body editor
