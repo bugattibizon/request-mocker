@@ -387,6 +387,7 @@ body.dark .jp { color:var(--text-sec); }
       <button type="button" class="hdr-tab active" data-lt="rules">Mock Rules<span class="tab-count" id="countRules"></span></button>
       <button type="button" class="hdr-tab" data-lt="headers">Inject Headers<span class="tab-count" id="countHeaders"></span></button>
       <button type="button" class="hdr-tab" data-lt="branch">Branch Mode<span class="tab-count" id="countBranch"></span></button>
+      <button type="button" class="hdr-tab" data-lt="jenkins">Jenkins<span class="tab-count" id="countJenkins"></span></button>
     </div>
     <span class="hdr-summary" id="ruleSummary"></span>
   </div>
@@ -422,6 +423,28 @@ body.dark .jp { color:var(--text-sec); }
       <div style="font-size:11px;color:var(--text-dim);line-height:1.6;border-top:1px solid var(--border);padding-top:12px">
         Every fetch/XHR request to <b>From host</b> (any method) is rerouted to <b>To host</b> — path, query and headers are preserved. <b>Mock Rules take precedence.</b><br><br>
         💡 Enable this first, then log in again so authentication happens against the target backend.
+      </div>
+    </div>
+  </div>
+  <div class="branch-panel" id="jenkinsPanel" style="display:none">
+    <div style="padding:16px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <label class="toggle toggle-sm">
+          <input type="checkbox" id="jkEnabled">
+          <span class="track"></span>
+        </label>
+        <span style="font-size:13px;font-weight:600">Redesign the Jenkins dev-env build page</span>
+      </div>
+      <a href="https://jenkins.anybiz.io/job/dev-env/build?delay=0sec" target="_blank" rel="noopener"
+         class="btn btn-ghost" style="text-decoration:none;text-align:center;justify-content:center;display:flex">
+        Open dev-env build page ↗
+      </a>
+      <div style="font-size:11px;color:var(--text-dim);line-height:1.6;border-top:1px solid var(--border);padding-top:12px">
+        Replaces the ~33-field parameters form on
+        <b class="mono" style="font-family:var(--mono)">jenkins.anybiz.io/job/dev-env/build</b>
+        with a compact launcher — snapshot chips, an action switch, an 11-service deploy matrix and a
+        searchable branch picker — driving the real inputs, so <b>Build</b> submits unchanged.<br><br>
+        💡 Reload an already-open build page after toggling. Use <b>Classic UI</b> on the page to drop back to the native form.
       </div>
     </div>
   </div>

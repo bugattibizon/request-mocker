@@ -12,6 +12,7 @@ var enabled = true;
 var editId = null;
 var injectHeaders = [];
 var branchMode = { enabled: false, from: '', to: '' };
+var jenkinsTheme = { enabled: false };
 var responseHeaderRows = [];
 var darkTheme = false;
 var editorSource = 'response';
@@ -106,11 +107,12 @@ document.addEventListener('click', function(e) {
 
 // ── Storage ──────────────────────────────────────────────────────────────────
 function load(cb) {
-  chrome.storage.local.get({ rules: [], enabled: true, injectHeaders: [], branchMode: { enabled: false, from: '', to: '' }, darkTheme: false, pendingImport: null }, function(d) {
+  chrome.storage.local.get({ rules: [], enabled: true, injectHeaders: [], branchMode: { enabled: false, from: '', to: '' }, jenkinsTheme: { enabled: false }, darkTheme: false, pendingImport: null }, function(d) {
     rules         = d.rules;
     enabled       = d.enabled;
     injectHeaders = d.injectHeaders;
     branchMode    = d.branchMode || { enabled: false, from: '', to: '' };
+    jenkinsTheme  = d.jenkinsTheme || { enabled: false };
     darkTheme     = d.darkTheme;
     applyTheme();
     if (cb) cb(d.pendingImport);
@@ -119,6 +121,7 @@ function load(cb) {
 function save(cb) { chrome.storage.local.set({ rules: rules, enabled: enabled }, cb); }
 function saveHeaders() { chrome.storage.local.set({ injectHeaders: injectHeaders }); updateCount(); }
 function saveBranch() { chrome.storage.local.set({ branchMode: branchMode }); updateCount(); }
+function saveJenkins() { chrome.storage.local.set({ jenkinsTheme: jenkinsTheme }); updateCount(); }
 
 function readPaginationConfig() {
   return {
@@ -213,20 +216,27 @@ function applyActiveTab() {
   var lt        = activeTab ? activeTab.dataset.lt : 'rules';
   var isHeaders = lt === 'headers';
   var isBranch  = lt === 'branch';
+  var isJenkins = lt === 'jenkins';
   var isRules   = lt === 'rules';
   $('ruleList').style.display     = isRules   ? ''     : 'none';
   $('ihPanel').style.display      = isHeaders ? 'flex' : 'none';
   $('branchPanel').style.display  = isBranch  ? 'block': 'none';
+  $('jenkinsPanel').style.display = isJenkins ? 'block': 'none';
   $('btnAdd').style.display        = isRules   ? ''     : 'none';
   $('btnAddHeader').style.display  = isHeaders ? ''     : 'none';
   if (isHeaders) renderHeaders();
   if (isBranch)  renderBranch();
+  if (isJenkins) renderJenkins();
 }
 
 function renderBranch() {
   $('bmEnabled').checked = !!branchMode.enabled;
   $('bmFrom').value      = branchMode.from || '';
   $('bmTo').value        = branchMode.to   || '';
+}
+
+function renderJenkins() {
+  $('jkEnabled').checked = !!jenkinsTheme.enabled;
 }
 
 function showList() {
@@ -293,6 +303,7 @@ function updateCount() {
   $('countRules').textContent   = rules.length         ? activeRules + '/' + rules.length         : '';
   $('countHeaders').textContent = injectHeaders.length  ? activeIH   + '/' + injectHeaders.length  : '';
   $('countBranch').textContent  = (branchMode.enabled && branchMode.from && branchMode.to) ? 'on' : '';
+  $('countJenkins').textContent = jenkinsTheme.enabled ? 'on' : '';
   var rs = $('ruleSummary');
   if (rs) rs.innerHTML = rules.length ? '<b>' + activeRules + '</b> of <b>' + rules.length + '</b> active' : '';
 }
@@ -516,6 +527,12 @@ $('fPagEnabled').addEventListener('change', function() {
 });
 ['fPagPages','fPagPageParam','fPagPath'].forEach(function(id) {
   $(id).addEventListener('input', autoSave);
+});
+
+// Jenkins page-theme wiring
+$('jkEnabled').addEventListener('change', function() {
+  jenkinsTheme.enabled = this.checked;
+  saveJenkins();
 });
 
 // Branch Mode wiring

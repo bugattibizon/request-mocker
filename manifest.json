@@ -38,6 +38,14 @@
       "run_at": "document_start",
       "world": "MAIN",
       "all_frames": true
+    },
+    {
+      "matches": [
+        "https://jenkins.anybiz.io/job/dev-env/build*",
+        "https://jenkins.anybiz.io/job/dev-env/buildWithParameters*"
+      ],
+      "js": ["themes/jenkins-dev-env.js"],
+      "run_at": "document_idle"
     }
   ]
 }
