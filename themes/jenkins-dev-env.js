@@ -182,7 +182,6 @@ button,input,select{font:inherit;color:inherit}
   <div class="actionbar">
     <div class="summary" id="summary"></div>
     <div class="kbd"><b>⌘</b><b>↵</b> to run</div>
-    <button class="cancel" id="cancelBtn">Cancel</button>
     <button class="run" id="runBtn">▶ Build</button>
   </div>
  </div>
@@ -239,7 +238,7 @@ button,input,select{font:inherit;color:inherit}
         <div class="svc-head"><b>${k}</b><em>${REPO[k] || ''}</em><span class="offmain">off main</span></div>
         <div class="tgs">
           <label class="tg"><input type="checkbox" data-r="DEPLOY" data-k="${k}"><span>Deploy</span></label>
-          <label class="tg tg-build"><input type="checkbox" data-r="BUILD" data-k="${k}"><span>Rebuild</span></label>
+          <label class="tg tg-build"><input type="checkbox" data-r="BUILD" data-k="${k}"><span>Build</span></label>
         </div>
         <button class="branch" data-k="${k}"><span class="bn"></span>${CHEV}</button>
       </article>`).join('');
@@ -248,7 +247,6 @@ button,input,select{font:inherit;color:inherit}
     function render() {
       const action = gv('ACTION') || 'update';
       const app = $('app'); app.classList.toggle('act-destroy', action === 'destroy');
-      const isCreate = action === 'create';
       [...$('seg').children].forEach(b => b.setAttribute('aria-pressed', String(b.dataset.act === action)));
       $('actHint').textContent = { create:'Full env setup — every service is deployed.',
         update:'Rebuild or redeploy only the services you switch on.',
@@ -257,14 +255,13 @@ button,input,select{font:inherit;color:inherit}
       let d = 0, b = 0, off = 0;
       for (const k of SVC) {
         const el = q(`.svc[data-k="${k}"]`);
-        const dep = isCreate ? true : !!gv(k + '_DEPLOY');
+        const dep = !!gv(k + '_DEPLOY');
         const bld = !!gv(k + '_BUILD');
         const br  = has(k + '_BRANCH') ? gv(k + '_BRANCH') : 'main';
         const live = dep || bld, diff = br !== 'main';
         const cbD = el.querySelector('input[data-r="DEPLOY"]'), cbB = el.querySelector('input[data-r="BUILD"]');
-        cbD.checked = dep; cbD.disabled = isCreate;
+        cbD.checked = dep; cbD.disabled = false;
         cbB.checked = bld;
-        el.querySelector('.tg span').textContent = isCreate ? 'Deployed' : 'Deploy';
         el.querySelector('.bn').textContent = br;
         const brBtn = el.querySelector('.branch'); brBtn.disabled = !live;
         el.classList.toggle('idle', !live); el.classList.toggle('active', live);
@@ -289,7 +286,12 @@ button,input,select{font:inherit;color:inherit}
     }
 
     // ---- events → native ----
-    $('seg').addEventListener('click', e => { const btn = e.target.closest('button[data-act]'); if (btn) { sv('ACTION', btn.dataset.act); render(); } });
+    $('seg').addEventListener('click', e => {
+      const btn = e.target.closest('button[data-act]'); if (!btn) return;
+      const a = btn.dataset.act; sv('ACTION', a);
+      if (a === 'create') SVC.forEach(k => sv(k + '_DEPLOY', true)); // create defaults to deploy-all
+      render();
+    });
     $('snapChips').addEventListener('click', e => { const btn = e.target.closest('button[data-snap]'); if (btn) { sv('SNAPSHOT_ENV', btn.dataset.snap); render(); } });
     $('envInput').value = gv('BRANCH') || '';
     $('envInput').addEventListener('input', e => { sv('BRANCH', e.target.value); render(); });
@@ -355,7 +357,6 @@ button,input,select{font:inherit;color:inherit}
       if (btn) btn.click(); else form.requestSubmit ? form.requestSubmit() : form.submit();
     }
     $('runBtn').addEventListener('click', submit);
-    $('cancelBtn').addEventListener('click', () => history.length > 1 ? history.back() : location.assign('../'));
     $('classicBtn').addEventListener('click', teardown);
     root.addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { submit(); e.preventDefault(); } });
 
