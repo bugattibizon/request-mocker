@@ -33,6 +33,42 @@ chrome.storage.onChanged.addListener(() => {
   chrome.storage.local.get({ rules: [], enabled: true, injectHeaders: [], branchMode: { enabled: false, from: "", to: "" }, jenkinsTheme: { enabled: false } }, updateBadge);
 });
 
+// ── Branch Mode: strip Origin/Referer on the target host ─────────────────────
+// The redirected request still carries the page's real Origin (a browser-controlled
+// "forbidden header" the interceptor can't touch). Some backends reject it at the
+// app level ({"errors":{"origin":["is blocked or not available"]}}). A network-level
+// declarativeNetRequest rule removes Origin + Referer for requests to the target
+// host, so the request looks origin-less (like Postman) and is accepted; the target's
+// Access-Control-Allow-Origin: * still lets the browser read the response.
+const ORIGIN_RULE_ID = 8801;
+
+function syncOriginRule() {
+  chrome.storage.local.get({ enabled: true, branchMode: { enabled: false, from: '', to: '' } }, (d) => {
+    const bm = d.branchMode || {};
+    const clear = () => chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: [ORIGIN_RULE_ID] }).catch(() => {});
+    if (d.enabled === false || !bm.enabled || !bm.to) { clear(); return; }
+    let host;
+    try { host = new URL(/^https?:\/\//.test(bm.to) ? bm.to : 'https://' + bm.to).hostname; }
+    catch (e) { clear(); return; }
+    chrome.declarativeNetRequest.updateDynamicRules({
+      removeRuleIds: [ORIGIN_RULE_ID],
+      addRules: [{
+        id: ORIGIN_RULE_ID,
+        priority: 1,
+        action: { type: 'modifyHeaders', requestHeaders: [
+          { header: 'origin',  operation: 'remove' },
+          { header: 'referer', operation: 'remove' }
+        ]},
+        condition: { requestDomains: [host], resourceTypes: ['xmlhttprequest'] }
+      }]
+    }).catch(() => {});
+  });
+}
+
+chrome.runtime.onInstalled.addListener(syncOriginRule);
+chrome.runtime.onStartup.addListener(syncOriginRule);
+chrome.storage.onChanged.addListener((changes) => { if (changes.branchMode || changes.enabled) syncOriginRule(); });
+
 // Signal the DevTools panel to clear when the inspected tab navigates.
 // chrome.devtools.network.onNavigated is unreliable in devtools pages;
 // chrome.tabs.onUpdated fires reliably from the background with no extra permissions.

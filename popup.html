@@ -422,6 +422,7 @@ body.dark .jp { color:var(--text-sec); }
       </div>
       <div style="font-size:11px;color:var(--text-dim);line-height:1.6;border-top:1px solid var(--border);padding-top:12px">
         Every fetch/XHR request to <b>From host</b> (any method) is rerouted to <b>To host</b> — path, query and headers are preserved. <b>Mock Rules take precedence.</b><br><br>
+        The <b>Origin</b> and <b>Referer</b> headers are stripped on requests to <b>To host</b>, so a backend with an origin allowlist accepts the redirected request.<br><br>
         💡 Enable this first, then log in again so authentication happens against the target backend.
       </div>
     </div>
