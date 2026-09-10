@@ -37,44 +37,62 @@ chrome.storage.onChanged.addListener(() => {
 // The redirected request still carries the page's real Origin (a browser-controlled
 // "forbidden header" the interceptor can't touch). Some backends reject it at the app
 // level ({"errors":{"origin":["is blocked or not available"]}}) while their CORS layer
-// *echoes* the request Origin into Access-Control-Allow-Origin. A network-level
-// declarativeNetRequest rule for the target host:
-//   • removes Origin + Referer on the actual request (non-OPTIONS) so the app accepts
-//     it like an origin-less Postman call — but leaves the CORS preflight (OPTIONS)
-//     untouched so it still echoes ACAO and passes;
-//   • forces Access-Control-Allow-Origin: * on the response so the browser can read it
-//     (the request is non-credentialed, so * is accepted).
-const ORIGIN_RULE_ID = 8801;
+// *echoes* the request Origin into Access-Control-Allow-Origin. Network-level
+// declarativeNetRequest rules for the target host bridge this:
+//
+//  • Stateless (no "App origin" set): strip Origin + Referer on the actual request
+//    (non-OPTIONS) so the app accepts it like an origin-less Postman call, and force
+//    Access-Control-Allow-Origin: * on the response so the browser can read it. The
+//    preflight (OPTIONS) is left untouched. Works for non-credentialed token auth.
+//
+//  • Cookie auth ("App origin" set): the request must be credentialed for cookies to
+//    flow, and * is illegal with credentials — so instead force ACAO=<app origin> +
+//    Access-Control-Allow-Credentials: true on EVERY response (incl. the preflight,
+//    which the server won't mark credentialed on its own), while still stripping the
+//    request Origin/Referer only on the actual (non-OPTIONS) request for the app gate.
+const ORIGIN_RULE_ID  = 8801; // request-header strip (non-OPTIONS)
+const ORIGIN_RULE_ID2 = 8802; // response CORS headers (credentialed mode)
 
 function syncOriginRule() {
-  chrome.storage.local.get({ enabled: true, branchMode: { enabled: false, from: '', to: '' } }, (d) => {
+  chrome.storage.local.get({ enabled: true, branchMode: { enabled: false, from: '', to: '', origin: '' } }, (d) => {
     const bm = d.branchMode || {};
-    const clear = () => chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: [ORIGIN_RULE_ID] }).catch(() => {});
+    const clear = () => chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: [ORIGIN_RULE_ID, ORIGIN_RULE_ID2] }).catch(() => {});
     if (d.enabled === false || !bm.enabled || !bm.to) { clear(); return; }
-    let host;
+    let host, appOrigin = '';
     try { host = new URL(/^https?:\/\//.test(bm.to) ? bm.to : 'https://' + bm.to).hostname; }
     catch (e) { clear(); return; }
+    if (bm.origin) { try { appOrigin = new URL(/^https?:\/\//.test(bm.origin) ? bm.origin : 'https://' + bm.origin).origin; } catch (e) {} }
+
+    const stripReq = {
+      id: ORIGIN_RULE_ID, priority: 1,
+      action: { type: 'modifyHeaders', requestHeaders: [
+        { header: 'origin',  operation: 'remove' },
+        { header: 'referer', operation: 'remove' }
+      ]},
+      condition: { requestDomains: [host], excludedRequestMethods: ['options'], resourceTypes: ['xmlhttprequest'] }
+    };
+
+    const rules = [stripReq];
+    if (appOrigin) {
+      // Credentialed: exact-origin ACAO + credentials on every response (incl. preflight).
+      rules.push({
+        id: ORIGIN_RULE_ID2, priority: 1,
+        action: { type: 'modifyHeaders', responseHeaders: [
+          { header: 'access-control-allow-origin',      operation: 'set', value: appOrigin },
+          { header: 'access-control-allow-credentials', operation: 'set', value: 'true' }
+        ]},
+        condition: { requestDomains: [host], resourceTypes: ['xmlhttprequest'] }
+      });
+    } else {
+      // Stateless: wildcard ACAO on the actual response only.
+      stripReq.action.responseHeaders = [
+        { header: 'access-control-allow-origin', operation: 'set', value: '*' }
+      ];
+    }
+
     chrome.declarativeNetRequest.updateDynamicRules({
-      removeRuleIds: [ORIGIN_RULE_ID],
-      addRules: [{
-        id: ORIGIN_RULE_ID,
-        priority: 1,
-        action: {
-          type: 'modifyHeaders',
-          requestHeaders: [
-            { header: 'origin',  operation: 'remove' },
-            { header: 'referer', operation: 'remove' }
-          ],
-          responseHeaders: [
-            { header: 'access-control-allow-origin', operation: 'set', value: '*' }
-          ]
-        },
-        condition: {
-          requestDomains: [host],
-          excludedRequestMethods: ['options'], // keep the CORS preflight intact
-          resourceTypes: ['xmlhttprequest']
-        }
-      }]
+      removeRuleIds: [ORIGIN_RULE_ID, ORIGIN_RULE_ID2],
+      addRules: rules
     }).catch(() => {});
   });
 }

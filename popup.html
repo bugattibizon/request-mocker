@@ -420,9 +420,17 @@ body.dark .jp { color:var(--text-sec); }
         <label class="label">To host</label>
         <input type="text" id="bmTo" placeholder="cf-9792-api.warmy.io">
       </div>
+      <div class="field">
+        <label class="label">
+          App origin
+          <span style="font-weight:normal;color:var(--text-dim)"> — optional, only for cookie auth</span>
+        </label>
+        <input type="text" id="bmOrigin" placeholder="https://test-app.warmy.io">
+      </div>
       <div style="font-size:11px;color:var(--text-dim);line-height:1.6;border-top:1px solid var(--border);padding-top:12px">
         Every fetch/XHR request to <b>From host</b> (any method) is rerouted to <b>To host</b> — path, query and headers are preserved. <b>Mock Rules take precedence.</b><br><br>
         The <b>Origin</b> and <b>Referer</b> headers are stripped on requests to <b>To host</b>, so a backend with an origin allowlist accepts the redirected request.<br><br>
+        Set <b>App origin</b> to this page's origin only if the backend uses <b>cookie</b> auth (e.g. a token-refresh cookie): the redirect then runs credentialed and the response is given <code>Access-Control-Allow-Origin: &lt;App origin&gt;</code> + credentials so cookies are stored and sent.<br><br>
         💡 Enable this first, then log in again so authentication happens against the target backend.
       </div>
     </div>

@@ -11,7 +11,7 @@ var rules = [];
 var enabled = true;
 var editId = null;
 var injectHeaders = [];
-var branchMode = { enabled: false, from: '', to: '' };
+var branchMode = { enabled: false, from: '', to: '', origin: '' };
 var jenkinsTheme = { enabled: false };
 var responseHeaderRows = [];
 var darkTheme = false;
@@ -107,11 +107,11 @@ document.addEventListener('click', function(e) {
 
 // ── Storage ──────────────────────────────────────────────────────────────────
 function load(cb) {
-  chrome.storage.local.get({ rules: [], enabled: true, injectHeaders: [], branchMode: { enabled: false, from: '', to: '' }, jenkinsTheme: { enabled: false }, darkTheme: false, pendingImport: null }, function(d) {
+  chrome.storage.local.get({ rules: [], enabled: true, injectHeaders: [], branchMode: { enabled: false, from: '', to: '', origin: '' }, jenkinsTheme: { enabled: false }, darkTheme: false, pendingImport: null }, function(d) {
     rules         = d.rules;
     enabled       = d.enabled;
     injectHeaders = d.injectHeaders;
-    branchMode    = d.branchMode || { enabled: false, from: '', to: '' };
+    branchMode    = d.branchMode || { enabled: false, from: '', to: '', origin: '' };
     jenkinsTheme  = d.jenkinsTheme || { enabled: false };
     darkTheme     = d.darkTheme;
     applyTheme();
@@ -231,8 +231,9 @@ function applyActiveTab() {
 
 function renderBranch() {
   $('bmEnabled').checked = !!branchMode.enabled;
-  $('bmFrom').value      = branchMode.from || '';
-  $('bmTo').value        = branchMode.to   || '';
+  $('bmFrom').value      = branchMode.from   || '';
+  $('bmTo').value        = branchMode.to     || '';
+  $('bmOrigin').value    = branchMode.origin || '';
 }
 
 function renderJenkins() {
@@ -540,10 +541,11 @@ $('bmEnabled').addEventListener('change', function() {
   branchMode.enabled = this.checked;
   saveBranch();
 });
-['bmFrom','bmTo'].forEach(function(id) {
+['bmFrom','bmTo','bmOrigin'].forEach(function(id) {
   $(id).addEventListener('input', function() {
-    branchMode.from = $('bmFrom').value.trim();
-    branchMode.to   = $('bmTo').value.trim();
+    branchMode.from   = $('bmFrom').value.trim();
+    branchMode.to     = $('bmTo').value.trim();
+    branchMode.origin = $('bmOrigin').value.trim();
     saveBranch();
   });
 });

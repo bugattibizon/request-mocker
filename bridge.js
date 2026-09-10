@@ -12,7 +12,7 @@ function alive() {
 function sync() {
   if (!alive()) return;
   try {
-    chrome.storage.local.get({ rules: [], enabled: true, injectHeaders: [], branchMode: { enabled: false, from: '', to: '' } }, (data) => {
+    chrome.storage.local.get({ rules: [], enabled: true, injectHeaders: [], branchMode: { enabled: false, from: '', to: '', origin: '' } }, (data) => {
       if (chrome.runtime && chrome.runtime.lastError) return;
       window.dispatchEvent(new CustomEvent('__RM_sync', { detail: data }));
     });

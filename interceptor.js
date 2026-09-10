@@ -61,15 +61,17 @@
     _needBody = _rules.some(r => r._body);
 
     var bm = state.branchMode || {};
-    _branch = (state.enabled && bm.enabled && bm.from && bm.to) ? parseBranch(bm.from, bm.to) : null;
+    _branch = (state.enabled && bm.enabled && bm.from && bm.to) ? parseBranch(bm.from, bm.to, bm.origin) : null;
   }
 
-  // Normalise the Branch Mode host pair into { fromHost, toOrigin }.
-  function parseBranch(from, to) {
+  // Normalise the Branch Mode config into { fromHost, toOrigin, credentialed }.
+  // credentialed = an "App origin" is configured, so cookie auth needs the redirect
+  // to send credentials (background.js pairs this with exact-origin CORS headers).
+  function parseBranch(from, to, appOrigin) {
     try {
       var f = new URL(/^https?:\/\//.test(from) ? from : 'https://' + from);
       var t = new URL(/^https?:\/\//.test(to)   ? to   : 'https://' + to);
-      return { fromHost: f.hostname, toOrigin: t.origin };
+      return { fromHost: f.hostname, toOrigin: t.origin, credentialed: !!(appOrigin && String(appOrigin).trim()) };
     } catch (e) { return null; }
   }
 
@@ -245,6 +247,8 @@
                      : (input instanceof Request ? input.body : init.body),
         headers,
       };
+      // Cookie-auth mode: send credentials so Set-Cookie is stored / cookies are sent.
+      if (_branch && _branch.credentialed) init.credentials = 'include';
     } else if (_ih.length) {
       const headers = new Headers(init.headers || {});
       _ih.forEach(h => headers.set(h.name, h.value));
@@ -327,6 +331,8 @@
         _xhrHeaders.forEach(([name, value]) => {
           try { origSetRequestHeader(name, value); } catch(e) {}
         });
+        // Cookie-auth mode: send credentials so Set-Cookie is stored / cookies are sent.
+        if (_branch && _branch.credentialed) { try { xhr.withCredentials = true; } catch(e) {} }
       } else {
         // No redirect — apply inject headers to the real request.
         _ih.forEach(h => { try { xhr.setRequestHeader(h.name, h.value); } catch {} });
