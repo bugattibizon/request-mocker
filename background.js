@@ -33,13 +33,17 @@ chrome.storage.onChanged.addListener(() => {
   chrome.storage.local.get({ rules: [], enabled: true, injectHeaders: [], branchMode: { enabled: false, from: "", to: "" }, jenkinsTheme: { enabled: false } }, updateBadge);
 });
 
-// ── Branch Mode: strip Origin/Referer on the target host ─────────────────────
+// ── Branch Mode: make the redirected request pass the target's origin gate ────
 // The redirected request still carries the page's real Origin (a browser-controlled
-// "forbidden header" the interceptor can't touch). Some backends reject it at the
-// app level ({"errors":{"origin":["is blocked or not available"]}}). A network-level
-// declarativeNetRequest rule removes Origin + Referer for requests to the target
-// host, so the request looks origin-less (like Postman) and is accepted; the target's
-// Access-Control-Allow-Origin: * still lets the browser read the response.
+// "forbidden header" the interceptor can't touch). Some backends reject it at the app
+// level ({"errors":{"origin":["is blocked or not available"]}}) while their CORS layer
+// *echoes* the request Origin into Access-Control-Allow-Origin. A network-level
+// declarativeNetRequest rule for the target host:
+//   • removes Origin + Referer on the actual request (non-OPTIONS) so the app accepts
+//     it like an origin-less Postman call — but leaves the CORS preflight (OPTIONS)
+//     untouched so it still echoes ACAO and passes;
+//   • forces Access-Control-Allow-Origin: * on the response so the browser can read it
+//     (the request is non-credentialed, so * is accepted).
 const ORIGIN_RULE_ID = 8801;
 
 function syncOriginRule() {
@@ -55,11 +59,21 @@ function syncOriginRule() {
       addRules: [{
         id: ORIGIN_RULE_ID,
         priority: 1,
-        action: { type: 'modifyHeaders', requestHeaders: [
-          { header: 'origin',  operation: 'remove' },
-          { header: 'referer', operation: 'remove' }
-        ]},
-        condition: { requestDomains: [host], resourceTypes: ['xmlhttprequest'] }
+        action: {
+          type: 'modifyHeaders',
+          requestHeaders: [
+            { header: 'origin',  operation: 'remove' },
+            { header: 'referer', operation: 'remove' }
+          ],
+          responseHeaders: [
+            { header: 'access-control-allow-origin', operation: 'set', value: '*' }
+          ]
+        },
+        condition: {
+          requestDomains: [host],
+          excludedRequestMethods: ['options'], // keep the CORS preflight intact
+          resourceTypes: ['xmlhttprequest']
+        }
       }]
     }).catch(() => {});
   });
