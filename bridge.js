@@ -15,7 +15,27 @@ function sync() {
     chrome.storage.local.get({ rules: [], enabled: true, injectHeaders: [], branchMode: { enabled: false, from: '', to: '' } }, (data) => {
       if (chrome.runtime && chrome.runtime.lastError) return;
       window.dispatchEvent(new CustomEvent('__RM_sync', { detail: data }));
+      stampOrigin(data);
     });
+  } catch (e) { /* context invalidated */ }
+}
+
+// Record this page's real origin so background.js can build exact-origin credentialed
+// CORS headers for Branch Mode redirects. This is the actual request initiator origin —
+// far more reliable than "the active tab", which may be a different tab when a
+// background token-refresh fires (that mismatch produced a CORS error on refresh).
+// Top frame only; only while Branch Mode is on.
+var _lastOrigin = null;
+function stampOrigin(data) {
+  try {
+    if (window.top !== window.self) return;
+    var bm = data && data.branchMode;
+    if (!bm || !bm.enabled) return;
+    var origin = location.origin;
+    if (!/^https?:/.test(origin) || origin === _lastOrigin) return;
+    _lastOrigin = origin;
+    if (!alive()) return;
+    chrome.storage.local.set({ appOrigin: origin });
   } catch (e) { /* context invalidated */ }
 }
 
