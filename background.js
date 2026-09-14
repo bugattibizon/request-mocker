@@ -66,8 +66,17 @@ function activeTabOrigin(cb) {
   } catch (e) { cb(''); }
 }
 
+// Resolve the app origin for credentialed CORS: prefer the origin the page itself
+// stamped (bridge.js) — that is the true request initiator, so it stays correct even
+// when a background refresh fires while another tab is focused. Fall back to the active
+// tab only before the app page has stamped anything.
+function resolveAppOrigin(stamped, cb) {
+  if (stamped && /^https?:/.test(stamped)) { cb(stamped); return; }
+  activeTabOrigin(cb);
+}
+
 function syncOriginRule() {
-  chrome.storage.local.get({ enabled: true, branchMode: { enabled: false, from: '', to: '' } }, (d) => {
+  chrome.storage.local.get({ enabled: true, branchMode: { enabled: false, from: '', to: '' }, appOrigin: '' }, (d) => {
     const bm = d.branchMode || {};
     const clear = () => chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: [ORIGIN_RULE_ID, ORIGIN_RULE_ID2] }).catch(() => {});
     if (d.enabled === false || !bm.enabled || !bm.to) { clear(); return; }
@@ -75,7 +84,7 @@ function syncOriginRule() {
     try { host = new URL(/^https?:\/\//.test(bm.to) ? bm.to : 'https://' + bm.to).hostname; }
     catch (e) { clear(); return; }
 
-    activeTabOrigin((appOrigin) => {
+    resolveAppOrigin(d.appOrigin, (appOrigin) => {
       const stripReq = {
         id: ORIGIN_RULE_ID, priority: 1,
         action: { type: 'modifyHeaders', requestHeaders: [
@@ -114,16 +123,17 @@ function syncOriginRule() {
 
 chrome.runtime.onInstalled.addListener(syncOriginRule);
 chrome.runtime.onStartup.addListener(syncOriginRule);
-chrome.storage.onChanged.addListener((changes) => { if (changes.branchMode || changes.enabled) syncOriginRule(); });
-// Keep the credentialed ACAO origin in step with the active tab (single-tab workflow).
-chrome.tabs.onActivated.addListener(() => syncOriginRule());
+// Rebuild the rule on config changes and when the page re-stamps its origin (bridge.js).
+// We intentionally do NOT rebuild on tab activation: the app origin comes from the page
+// itself, so switching tabs must not repoint ACAO at whatever tab is now focused.
+chrome.storage.onChanged.addListener((changes) => {
+  if (changes.branchMode || changes.enabled || changes.appOrigin) syncOriginRule();
+});
 
 // Signal the DevTools panel to clear when the inspected tab navigates.
 // chrome.devtools.network.onNavigated is unreliable in devtools pages;
 // chrome.tabs.onUpdated fires reliably from the background with no extra permissions.
 chrome.tabs.onUpdated.addListener(function(tabId, changeInfo) {
-  // A committed navigation changes the page origin — rebuild the credentialed ACAO rule.
-  if (changeInfo.url) syncOriginRule();
   if (changeInfo.status !== 'loading') return;
   chrome.storage.local.get({ devtoolsTabId: -1 }, function(d) {
     if (d.devtoolsTabId === tabId) {

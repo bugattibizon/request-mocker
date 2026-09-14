@@ -59,6 +59,8 @@ body {
   box-shadow:0 6px 16px -6px var(--brand-glow),0 1px 0 rgba(255,255,255,.25) inset; }
 .hdr-id { display:flex; flex-direction:column; line-height:1; }
 .hdr-name { font-size:14px; font-weight:750; letter-spacing:-.01em; color:var(--text); }
+.hdr-ver { font:600 10px var(--mono); color:var(--text-dim); letter-spacing:0; vertical-align:1px; }
+.hdr-ver:empty { display:none; }
 .hdr-sub { font:600 9.5px/1 var(--mono); letter-spacing:.1em; text-transform:uppercase; color:var(--text-dim); margin-top:4px; }
 .hdr-spacer { flex:1; }
 .hdr-live { display:none; align-items:center; gap:6px; font:700 10px/1 var(--mono); letter-spacing:.14em;
@@ -110,6 +112,14 @@ body.dark .hdr-tab.active { box-shadow:0 2px 12px -4px rgba(0,0,0,.65),0 0 0 1px
 .toggle-sm { width: 34px; height: 20px; }
 .toggle-sm .track::before { width: 14px; height: 14px; left: 3px; top: 3px; }
 .toggle-sm input:checked + .track::before { transform: translateX(14px); }
+
+/* ── Update-available button (header) ── */
+.hdr-update { display:inline-flex; align-items:center; gap:6px; text-decoration:none; cursor:pointer;
+  font-size:11px; font-weight:700; letter-spacing:.01em; white-space:nowrap; color:#fff;
+  padding:5px 11px; border-radius:999px; background:linear-gradient(180deg,var(--brand-2),var(--accent));
+  box-shadow:0 5px 13px -6px var(--brand-glow); transition:filter .15s; }
+.hdr-update:hover { filter:brightness(1.07); }
+.hdr-update .pulse { width:6px; height:6px; border-radius:50%; background:#fff; animation:rmpulse 2s infinite; }
 
 /* ── Views ── */
 .view { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
@@ -375,10 +385,13 @@ body.dark .jp { color:var(--text-sec); }
       </svg>
     </span>
     <div class="hdr-id">
-      <div class="hdr-name">Request Mocker</div>
+      <div class="hdr-name">Request Mocker <span class="hdr-ver" id="hdrVer"></span></div>
       <div class="hdr-sub">Intercept · Mock · Redirect</div>
     </div>
     <span class="hdr-spacer"></span>
+    <a class="hdr-update" id="hdrUpdate" target="_blank" rel="noopener" hidden>
+      <span class="pulse"></span><span id="hdrUpdateText">Update available</span>
+    </a>
     <span class="hdr-live"><span class="pulse"></span>LIVE</span>
     <label class="hdr-jk" id="hdrJk" title="Redesign the Jenkins dev-env build page">
       Jenkins

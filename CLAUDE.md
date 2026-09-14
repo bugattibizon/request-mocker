@@ -8,6 +8,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 To test changes: load the extension unpacked in `chrome://extensions` (enable Developer Mode → Load unpacked → select this directory), then reload the extension after any file change.
 
+## Versioning
+
+The extension is versioned with [SemVer](https://semver.org/) (`MAJOR.MINOR.PATCH`). The `version` in `manifest.json` is the single source of truth — the popup header reads it live via `chrome.runtime.getManifest().version`, so it is never hardcoded in the UI. When shipping user-facing changes, bump `manifest.json` (`PATCH` for fixes, `MINOR` for new features, `MAJOR` for breaking changes) and add a matching entry to `CHANGELOG.md`. The extension is distributed unpacked via git, so Chrome does not auto-update it; users pull and reload.
+
 ## Architecture
 
 The extension uses a 3-layer communication model to bridge the gap between Chrome's isolated extension context and the page's JavaScript context:
