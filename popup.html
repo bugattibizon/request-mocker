@@ -67,6 +67,12 @@ body {
 .hdr-live .pulse { width:6px; height:6px; border-radius:50%; background:var(--accent); animation:rmpulse 2s infinite; }
 @keyframes rmpulse { 0%{box-shadow:0 0 0 0 var(--brand-glow);} 70%{box-shadow:0 0 0 6px transparent;} 100%{box-shadow:0 0 0 0 transparent;} }
 
+/* Standalone Jenkins page-theme switch, promoted out of the tab bar into the header */
+.hdr-jk { display:flex; align-items:center; gap:8px; font-size:11px; font-weight:650; letter-spacing:.01em;
+  color:var(--text-sec); padding:4px 7px 4px 11px; border-radius:999px;
+  border:1px solid var(--line2); background:var(--raised); transition:color .15s, border-color .15s, background .15s; }
+.hdr-jk.on { color:var(--accent); border-color:var(--accent-glow); background:var(--accent-soft); }
+
 .hdr-nav { display:flex; align-items:center; gap:10px; padding:10px 16px; }
 .hdr-tabs { display:flex; gap:3px; background:var(--raised); padding:4px; border-radius:11px; border:1px solid var(--line2); }
 .hdr-tab { appearance:none; border:0; cursor:pointer; background:transparent; color:var(--text-sec);
@@ -75,8 +81,6 @@ body {
 .hdr-tab:hover:not(.active) { color:var(--text); }
 .hdr-tab.active { color:var(--text); background:var(--surface); box-shadow:0 2px 8px -3px rgba(0,0,0,.18),0 0 0 1px var(--border); }
 body.dark .hdr-tab.active { box-shadow:0 2px 12px -4px rgba(0,0,0,.65),0 0 0 1px var(--border); }
-.hdr-summary { margin-left:auto; font:600 11px var(--mono); font-variant-numeric:tabular-nums; color:var(--text-dim); white-space:nowrap; }
-.hdr-summary b { color:var(--text); font-weight:700; }
 
 .tab-count { font:700 10px var(--mono); font-variant-numeric:tabular-nums; padding:1px 6px; border-radius:999px; background:var(--surface2); color:var(--text-dim); transition:background .15s,color .15s; }
 .tab-count:empty { display:none; }
@@ -376,6 +380,13 @@ body.dark .jp { color:var(--text-sec); }
     </div>
     <span class="hdr-spacer"></span>
     <span class="hdr-live"><span class="pulse"></span>LIVE</span>
+    <label class="hdr-jk" id="hdrJk" title="Redesign the Jenkins dev-env build page">
+      Jenkins
+      <span class="toggle toggle-sm">
+        <input type="checkbox" id="jkEnabled">
+        <span class="track"></span>
+      </span>
+    </label>
     <button type="button" class="icon-btn" id="btnTheme" title="Toggle dark mode" style="display:flex;align-items:center"></button>
     <label class="toggle" title="Enable / disable all mocks">
       <input type="checkbox" id="globalToggle">
@@ -387,9 +398,7 @@ body.dark .jp { color:var(--text-sec); }
       <button type="button" class="hdr-tab active" data-lt="rules">Mock Rules<span class="tab-count" id="countRules"></span></button>
       <button type="button" class="hdr-tab" data-lt="headers">Inject Headers<span class="tab-count" id="countHeaders"></span></button>
       <button type="button" class="hdr-tab" data-lt="branch">Branch Mode<span class="tab-count" id="countBranch"></span></button>
-      <button type="button" class="hdr-tab" data-lt="jenkins">Jenkins<span class="tab-count" id="countJenkins"></span></button>
     </div>
-    <span class="hdr-summary" id="ruleSummary"></span>
   </div>
 </div>
 
@@ -432,28 +441,6 @@ body.dark .jp { color:var(--text-sec); }
         The <b>Origin</b> and <b>Referer</b> headers are stripped on requests to <b>To host</b>, so a backend with an origin allowlist accepts the redirected request.<br><br>
         Set <b>App origin</b> to this page's origin only if the backend uses <b>cookie</b> auth (e.g. a token-refresh cookie): the redirect then runs credentialed and the response is given <code>Access-Control-Allow-Origin: &lt;App origin&gt;</code> + credentials so cookies are stored and sent.<br><br>
         💡 Enable this first, then log in again so authentication happens against the target backend.
-      </div>
-    </div>
-  </div>
-  <div class="branch-panel" id="jenkinsPanel" style="display:none">
-    <div style="padding:16px;display:flex;flex-direction:column;gap:14px">
-      <div style="display:flex;align-items:center;gap:10px">
-        <label class="toggle toggle-sm">
-          <input type="checkbox" id="jkEnabled">
-          <span class="track"></span>
-        </label>
-        <span style="font-size:13px;font-weight:600">Redesign the Jenkins dev-env build page</span>
-      </div>
-      <a href="https://jenkins.anybiz.io/job/dev-env/build?delay=0sec" target="_blank" rel="noopener"
-         class="btn btn-ghost" style="text-decoration:none;text-align:center;justify-content:center;display:flex">
-        Open dev-env build page ↗
-      </a>
-      <div style="font-size:11px;color:var(--text-dim);line-height:1.6;border-top:1px solid var(--border);padding-top:12px">
-        Replaces the ~33-field parameters form on
-        <b class="mono" style="font-family:var(--mono)">jenkins.anybiz.io/job/dev-env/build</b>
-        with a compact launcher — snapshot chips, an action switch, an 11-service deploy matrix and a
-        searchable branch picker — driving the real inputs, so <b>Build</b> submits unchanged.<br><br>
-        💡 Reload an already-open build page after toggling. Use <b>Classic UI</b> on the page to drop back to the native form.
       </div>
     </div>
   </div>
