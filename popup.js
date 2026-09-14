@@ -801,6 +801,71 @@ try {
   if (verEl && ver) verEl.textContent = 'v' + ver;
 } catch (e) { /* not in an extension context */ }
 
+// ── Update check ────────────────────────────────────────────────────────────
+// The extension is distributed unpacked via git (no auto-update), so on popup open
+// we compare the installed version against manifest.json on master and, if newer,
+// show a banner pointing at the changelog. Result is cached to avoid hitting GitHub
+// on every open. Fails silently offline.
+var UPDATE_MANIFEST_URL = 'https://raw.githubusercontent.com/bugattibizon/request-mocker/master/manifest.json';
+var UPDATE_INFO_URL     = 'https://github.com/bugattibizon/request-mocker';
+var UPDATE_CHECK_TTL    = 6 * 60 * 60 * 1000; // re-check at most every 6h
+
+function cmpVer(a, b) {
+  var pa = String(a).split('.'), pb = String(b).split('.');
+  for (var i = 0; i < 3; i++) {
+    var d = (parseInt(pa[i], 10) || 0) - (parseInt(pb[i], 10) || 0);
+    if (d) return d > 0 ? 1 : -1;
+  }
+  return 0;
+}
+
+function renderUpdate(remote, local) {
+  var btn = $('hdrUpdate');
+  if (!btn) return;
+  if (remote && cmpVer(remote, local) > 0) {
+    $('hdrUpdateText').textContent = 'Update available';
+    btn.href = UPDATE_INFO_URL;
+    btn.title = 'v' + local + ' → v' + remote + ' · git pull & reload the extension';
+    btn.hidden = false;
+  } else {
+    btn.hidden = true;
+  }
+}
+
+function checkForUpdate() {
+  var local;
+  try { local = chrome.runtime.getManifest().version; } catch (e) { return; }
+  chrome.storage.local.get({ updateCheck: null }, function(d) {
+    var cached = d.updateCheck;
+    if (cached && cached.version && (Date.now() - cached.ts) < UPDATE_CHECK_TTL) {
+      renderUpdate(cached.version, local);
+      return;
+    }
+    fetch(UPDATE_MANIFEST_URL, { cache: 'no-store' })
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(j) {
+        if (!j || !j.version) return;
+        chrome.storage.local.set({ updateCheck: { version: j.version, ts: Date.now() } });
+        renderUpdate(j.version, local);
+      })
+      .catch(function() { /* offline / rate-limited — ignore */ });
+  });
+}
+
+// A plain <a target="_blank"> is unreliable inside an extension popup (the popup can
+// close before the tab opens), so open the repo explicitly via chrome.tabs.create.
+(function wireUpdate() {
+  var btn = $('hdrUpdate');
+  if (!btn) return;
+  btn.addEventListener('click', function(e) {
+    e.preventDefault();
+    try { chrome.tabs.create({ url: UPDATE_INFO_URL }); }
+    catch (err) { window.open(UPDATE_INFO_URL, '_blank'); }
+  });
+})();
+
+checkForUpdate();
+
 load(function(pendingImport) {
   render();
   applyActiveTab();

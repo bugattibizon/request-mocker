@@ -4,6 +4,15 @@ All notable changes to Request Mocker are recorded here. The version in
 `manifest.json` is the source of truth and is shown in the popup header.
 This project follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`.
 
+## [1.2.0]
+
+### Added
+- **Update-available button** in the popup header. On open, the extension compares its
+  installed version against `manifest.json` on `master` (cached for 6h) and, if a newer
+  version exists, shows an "Update available" button linking to the repo. Since the
+  extension is distributed unpacked via git, this notifies users to `git pull` + reload.
+- `PRIVACY.md` — privacy policy for the Chrome Web Store listing.
+
 ## [1.1.1]
 
 ### Fixed
