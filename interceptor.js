@@ -61,19 +61,18 @@
     _needBody = _rules.some(r => r._body);
 
     var bm = state.branchMode || {};
-    // cookieAuth is the new flag; bm.origin kept for back-compat with older saved config.
-    var credentialed = !!(bm.cookieAuth || (bm.origin && String(bm.origin).trim()));
-    _branch = (state.enabled && bm.enabled && bm.from && bm.to) ? parseBranch(bm.from, bm.to, credentialed) : null;
+    _branch = (state.enabled && bm.enabled && bm.from && bm.to) ? parseBranch(bm.from, bm.to) : null;
   }
 
-  // Normalise the Branch Mode config into { fromHost, toOrigin, credentialed }.
-  // credentialed = "Cookie auth" is on, so the redirect must send credentials
-  // (background.js pairs this with exact-origin CORS headers using the page origin).
-  function parseBranch(from, to, credentialed) {
+  // Normalise the Branch Mode config into { fromHost, toOrigin }. Redirects always
+  // run credentialed: background.js synthesizes exact-origin CORS headers (using the
+  // active tab origin) + Access-Control-Allow-Credentials on every response, which is
+  // universal — cookie auth needs it, token auth is unaffected by the extra cookies.
+  function parseBranch(from, to) {
     try {
       var f = new URL(/^https?:\/\//.test(from) ? from : 'https://' + from);
       var t = new URL(/^https?:\/\//.test(to)   ? to   : 'https://' + to);
-      return { fromHost: f.hostname, toOrigin: t.origin, credentialed: !!credentialed };
+      return { fromHost: f.hostname, toOrigin: t.origin };
     } catch (e) { return null; }
   }
 
@@ -249,8 +248,8 @@
                      : (input instanceof Request ? input.body : init.body),
         headers,
       };
-      // Cookie-auth mode: send credentials so Set-Cookie is stored / cookies are sent.
-      if (_branch && _branch.credentialed) init.credentials = 'include';
+      // Send credentials so any Set-Cookie is stored and cookies flow to the target.
+      init.credentials = 'include';
     } else if (_ih.length) {
       const headers = new Headers(init.headers || {});
       _ih.forEach(h => headers.set(h.name, h.value));
@@ -333,8 +332,8 @@
         _xhrHeaders.forEach(([name, value]) => {
           try { origSetRequestHeader(name, value); } catch(e) {}
         });
-        // Cookie-auth mode: send credentials so Set-Cookie is stored / cookies are sent.
-        if (_branch && _branch.credentialed) { try { xhr.withCredentials = true; } catch(e) {} }
+        // Send credentials so any Set-Cookie is stored and cookies flow to the target.
+        try { xhr.withCredentials = true; } catch(e) {}
       } else {
         // No redirect — apply inject headers to the real request.
         _ih.forEach(h => { try { xhr.setRequestHeader(h.name, h.value); } catch {} });

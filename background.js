@@ -38,26 +38,23 @@ chrome.storage.onChanged.addListener(() => {
 // "forbidden header" the interceptor can't touch). Some backends reject it at the app
 // level ({"errors":{"origin":["is blocked or not available"]}}) while their CORS layer
 // *echoes* the request Origin into Access-Control-Allow-Origin. Network-level
-// declarativeNetRequest rules for the target host bridge this:
+// declarativeNetRequest rules for the target host bridge this, in one universal mode:
 //
-//  • Stateless (Cookie auth off): strip Origin + Referer on the actual request
-//    (non-OPTIONS) so the app accepts it like an origin-less Postman call, and force
-//    Access-Control-Allow-Origin: * on the response so the browser can read it. The
-//    preflight (OPTIONS) is left untouched. Works for non-credentialed token auth.
-//
-//  • Cookie auth on: the request must be credentialed for cookies to flow, and * is
-//    illegal with credentials — so instead force ACAO=<active tab origin> +
-//    Access-Control-Allow-Credentials: true on EVERY response (incl. the preflight,
-//    which the server won't mark credentialed on its own), while still stripping the
-//    request Origin/Referer only on the actual (non-OPTIONS) request for the app gate.
-//    The origin is read live from the active tab, not typed by the user.
+//  • Strip Origin + Referer on the actual request (non-OPTIONS) so an app with an
+//    origin allowlist accepts it like an origin-less Postman call (the preflight is
+//    left untouched).
+//  • Force ACAO=<active tab origin> + Access-Control-Allow-Credentials: true on EVERY
+//    response (incl. the preflight, which the server won't mark credentialed on its
+//    own). Since the extension synthesizes these headers itself, the redirect always
+//    runs credentialed: cookie auth gets its Set-Cookie stored / cookies sent, and
+//    token auth is simply unaffected by the extra cookies. The origin is read live
+//    from the active tab, never typed by the user.
 const ORIGIN_RULE_ID  = 8801; // request-header strip (non-OPTIONS)
 const ORIGIN_RULE_ID2 = 8802; // response CORS headers (credentialed mode)
 
-// The extension is meant to drive a single active tab, so the "App origin" that
-// credentialed CORS needs is just that tab's origin — read it live instead of
-// asking the user to type it. host_permissions:<all_urls> lets us see tab.url
-// without the "tabs" permission.
+// The extension drives a single active tab, so the origin credentialed CORS needs is
+// just that tab's origin — read it live. host_permissions:<all_urls> lets us see
+// tab.url without the "tabs" permission.
 function activeTabOrigin(cb) {
   try {
     chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
@@ -70,7 +67,7 @@ function activeTabOrigin(cb) {
 }
 
 function syncOriginRule() {
-  chrome.storage.local.get({ enabled: true, branchMode: { enabled: false, from: '', to: '', cookieAuth: false, origin: '' } }, (d) => {
+  chrome.storage.local.get({ enabled: true, branchMode: { enabled: false, from: '', to: '' } }, (d) => {
     const bm = d.branchMode || {};
     const clear = () => chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: [ORIGIN_RULE_ID, ORIGIN_RULE_ID2] }).catch(() => {});
     if (d.enabled === false || !bm.enabled || !bm.to) { clear(); return; }
@@ -78,10 +75,7 @@ function syncOriginRule() {
     try { host = new URL(/^https?:\/\//.test(bm.to) ? bm.to : 'https://' + bm.to).hostname; }
     catch (e) { clear(); return; }
 
-    // cookieAuth is the flag; bm.origin (legacy text field) is honoured as a fallback.
-    const cookieAuth = !!(bm.cookieAuth || (bm.origin && String(bm.origin).trim()));
-
-    const apply = (appOrigin) => {
+    activeTabOrigin((appOrigin) => {
       const stripReq = {
         id: ORIGIN_RULE_ID, priority: 1,
         action: { type: 'modifyHeaders', requestHeaders: [
@@ -91,8 +85,10 @@ function syncOriginRule() {
         condition: { requestDomains: [host], excludedRequestMethods: ['options'], resourceTypes: ['xmlhttprequest'] }
       };
       const rules = [stripReq];
-      if (cookieAuth && appOrigin) {
-        // Credentialed: exact-origin ACAO + credentials on every response (incl. preflight).
+      if (appOrigin) {
+        // Exact-origin ACAO + credentials on every response (incl. preflight) so the
+        // redirect is readable and any Set-Cookie is stored. Universal: works for both
+        // cookie auth and token auth.
         rules.push({
           id: ORIGIN_RULE_ID2, priority: 1,
           action: { type: 'modifyHeaders', responseHeaders: [
@@ -102,7 +98,8 @@ function syncOriginRule() {
           condition: { requestDomains: [host], resourceTypes: ['xmlhttprequest'] }
         });
       } else {
-        // Stateless: wildcard ACAO on the actual response only.
+        // Origin not resolvable yet (no normal page focused) — degrade to wildcard ACAO
+        // on the actual response. Re-syncs to exact-origin once the app tab is active.
         stripReq.action.responseHeaders = [
           { header: 'access-control-allow-origin', operation: 'set', value: '*' }
         ];
@@ -111,17 +108,7 @@ function syncOriginRule() {
         removeRuleIds: [ORIGIN_RULE_ID, ORIGIN_RULE_ID2],
         addRules: rules
       }).catch(() => {});
-    };
-
-    if (cookieAuth) {
-      activeTabOrigin((o) => {
-        let appOrigin = o;
-        if (!appOrigin && bm.origin) { try { appOrigin = new URL(/^https?:\/\//.test(bm.origin) ? bm.origin : 'https://' + bm.origin).origin; } catch (e) {} }
-        apply(appOrigin);
-      });
-    } else {
-      apply('');
-    }
+    });
   });
 }
 
