@@ -11,7 +11,7 @@ var rules = [];
 var enabled = true;
 var editId = null;
 var injectHeaders = [];
-var branchMode = { enabled: false, from: '', to: '', origin: '' };
+var branchMode = { enabled: false, from: '', to: '', cookieAuth: false };
 var jenkinsTheme = { enabled: false };
 var responseHeaderRows = [];
 var darkTheme = false;
@@ -107,11 +107,14 @@ document.addEventListener('click', function(e) {
 
 // ── Storage ──────────────────────────────────────────────────────────────────
 function load(cb) {
-  chrome.storage.local.get({ rules: [], enabled: true, injectHeaders: [], branchMode: { enabled: false, from: '', to: '', origin: '' }, jenkinsTheme: { enabled: false }, darkTheme: false, pendingImport: null }, function(d) {
+  chrome.storage.local.get({ rules: [], enabled: true, injectHeaders: [], branchMode: { enabled: false, from: '', to: '', cookieAuth: false }, jenkinsTheme: { enabled: false }, darkTheme: false, pendingImport: null }, function(d) {
     rules         = d.rules;
     enabled       = d.enabled;
     injectHeaders = d.injectHeaders;
-    branchMode    = d.branchMode || { enabled: false, from: '', to: '', origin: '' };
+    branchMode    = d.branchMode || { enabled: false, from: '', to: '', cookieAuth: false };
+    // Migrate the old free-text "App origin" field to the cookieAuth flag.
+    if (branchMode.cookieAuth === undefined) branchMode.cookieAuth = !!(branchMode.origin && String(branchMode.origin).trim());
+    delete branchMode.origin;
     jenkinsTheme  = d.jenkinsTheme || { enabled: false };
     darkTheme     = d.darkTheme;
     applyTheme();
@@ -231,10 +234,10 @@ function applyActiveTab() {
 }
 
 function renderBranch() {
-  $('bmEnabled').checked = !!branchMode.enabled;
-  $('bmFrom').value      = branchMode.from   || '';
-  $('bmTo').value        = branchMode.to     || '';
-  $('bmOrigin').value    = branchMode.origin || '';
+  $('bmEnabled').checked    = !!branchMode.enabled;
+  $('bmFrom').value         = branchMode.from || '';
+  $('bmTo').value           = branchMode.to   || '';
+  $('bmCookieAuth').checked = !!branchMode.cookieAuth;
 }
 
 function showList() {
@@ -539,11 +542,14 @@ $('bmEnabled').addEventListener('change', function() {
   branchMode.enabled = this.checked;
   saveBranch();
 });
-['bmFrom','bmTo','bmOrigin'].forEach(function(id) {
+$('bmCookieAuth').addEventListener('change', function() {
+  branchMode.cookieAuth = this.checked;
+  saveBranch();
+});
+['bmFrom','bmTo'].forEach(function(id) {
   $(id).addEventListener('input', function() {
-    branchMode.from   = $('bmFrom').value.trim();
-    branchMode.to     = $('bmTo').value.trim();
-    branchMode.origin = $('bmOrigin').value.trim();
+    branchMode.from = $('bmFrom').value.trim();
+    branchMode.to   = $('bmTo').value.trim();
     saveBranch();
   });
 });

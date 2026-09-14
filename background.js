@@ -40,71 +40,103 @@ chrome.storage.onChanged.addListener(() => {
 // *echoes* the request Origin into Access-Control-Allow-Origin. Network-level
 // declarativeNetRequest rules for the target host bridge this:
 //
-//  • Stateless (no "App origin" set): strip Origin + Referer on the actual request
+//  • Stateless (Cookie auth off): strip Origin + Referer on the actual request
 //    (non-OPTIONS) so the app accepts it like an origin-less Postman call, and force
 //    Access-Control-Allow-Origin: * on the response so the browser can read it. The
 //    preflight (OPTIONS) is left untouched. Works for non-credentialed token auth.
 //
-//  • Cookie auth ("App origin" set): the request must be credentialed for cookies to
-//    flow, and * is illegal with credentials — so instead force ACAO=<app origin> +
+//  • Cookie auth on: the request must be credentialed for cookies to flow, and * is
+//    illegal with credentials — so instead force ACAO=<active tab origin> +
 //    Access-Control-Allow-Credentials: true on EVERY response (incl. the preflight,
 //    which the server won't mark credentialed on its own), while still stripping the
 //    request Origin/Referer only on the actual (non-OPTIONS) request for the app gate.
+//    The origin is read live from the active tab, not typed by the user.
 const ORIGIN_RULE_ID  = 8801; // request-header strip (non-OPTIONS)
 const ORIGIN_RULE_ID2 = 8802; // response CORS headers (credentialed mode)
 
+// The extension is meant to drive a single active tab, so the "App origin" that
+// credentialed CORS needs is just that tab's origin — read it live instead of
+// asking the user to type it. host_permissions:<all_urls> lets us see tab.url
+// without the "tabs" permission.
+function activeTabOrigin(cb) {
+  try {
+    chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
+      let origin = '';
+      try { origin = tabs && tabs[0] && tabs[0].url ? new URL(tabs[0].url).origin : ''; } catch (e) {}
+      if (!/^https?:/.test(origin)) origin = ''; // ignore chrome://, the popup, blank tabs
+      cb(origin);
+    });
+  } catch (e) { cb(''); }
+}
+
 function syncOriginRule() {
-  chrome.storage.local.get({ enabled: true, branchMode: { enabled: false, from: '', to: '', origin: '' } }, (d) => {
+  chrome.storage.local.get({ enabled: true, branchMode: { enabled: false, from: '', to: '', cookieAuth: false, origin: '' } }, (d) => {
     const bm = d.branchMode || {};
     const clear = () => chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: [ORIGIN_RULE_ID, ORIGIN_RULE_ID2] }).catch(() => {});
     if (d.enabled === false || !bm.enabled || !bm.to) { clear(); return; }
-    let host, appOrigin = '';
+    let host;
     try { host = new URL(/^https?:\/\//.test(bm.to) ? bm.to : 'https://' + bm.to).hostname; }
     catch (e) { clear(); return; }
-    if (bm.origin) { try { appOrigin = new URL(/^https?:\/\//.test(bm.origin) ? bm.origin : 'https://' + bm.origin).origin; } catch (e) {} }
 
-    const stripReq = {
-      id: ORIGIN_RULE_ID, priority: 1,
-      action: { type: 'modifyHeaders', requestHeaders: [
-        { header: 'origin',  operation: 'remove' },
-        { header: 'referer', operation: 'remove' }
-      ]},
-      condition: { requestDomains: [host], excludedRequestMethods: ['options'], resourceTypes: ['xmlhttprequest'] }
+    // cookieAuth is the flag; bm.origin (legacy text field) is honoured as a fallback.
+    const cookieAuth = !!(bm.cookieAuth || (bm.origin && String(bm.origin).trim()));
+
+    const apply = (appOrigin) => {
+      const stripReq = {
+        id: ORIGIN_RULE_ID, priority: 1,
+        action: { type: 'modifyHeaders', requestHeaders: [
+          { header: 'origin',  operation: 'remove' },
+          { header: 'referer', operation: 'remove' }
+        ]},
+        condition: { requestDomains: [host], excludedRequestMethods: ['options'], resourceTypes: ['xmlhttprequest'] }
+      };
+      const rules = [stripReq];
+      if (cookieAuth && appOrigin) {
+        // Credentialed: exact-origin ACAO + credentials on every response (incl. preflight).
+        rules.push({
+          id: ORIGIN_RULE_ID2, priority: 1,
+          action: { type: 'modifyHeaders', responseHeaders: [
+            { header: 'access-control-allow-origin',      operation: 'set', value: appOrigin },
+            { header: 'access-control-allow-credentials', operation: 'set', value: 'true' }
+          ]},
+          condition: { requestDomains: [host], resourceTypes: ['xmlhttprequest'] }
+        });
+      } else {
+        // Stateless: wildcard ACAO on the actual response only.
+        stripReq.action.responseHeaders = [
+          { header: 'access-control-allow-origin', operation: 'set', value: '*' }
+        ];
+      }
+      chrome.declarativeNetRequest.updateDynamicRules({
+        removeRuleIds: [ORIGIN_RULE_ID, ORIGIN_RULE_ID2],
+        addRules: rules
+      }).catch(() => {});
     };
 
-    const rules = [stripReq];
-    if (appOrigin) {
-      // Credentialed: exact-origin ACAO + credentials on every response (incl. preflight).
-      rules.push({
-        id: ORIGIN_RULE_ID2, priority: 1,
-        action: { type: 'modifyHeaders', responseHeaders: [
-          { header: 'access-control-allow-origin',      operation: 'set', value: appOrigin },
-          { header: 'access-control-allow-credentials', operation: 'set', value: 'true' }
-        ]},
-        condition: { requestDomains: [host], resourceTypes: ['xmlhttprequest'] }
+    if (cookieAuth) {
+      activeTabOrigin((o) => {
+        let appOrigin = o;
+        if (!appOrigin && bm.origin) { try { appOrigin = new URL(/^https?:\/\//.test(bm.origin) ? bm.origin : 'https://' + bm.origin).origin; } catch (e) {} }
+        apply(appOrigin);
       });
     } else {
-      // Stateless: wildcard ACAO on the actual response only.
-      stripReq.action.responseHeaders = [
-        { header: 'access-control-allow-origin', operation: 'set', value: '*' }
-      ];
+      apply('');
     }
-
-    chrome.declarativeNetRequest.updateDynamicRules({
-      removeRuleIds: [ORIGIN_RULE_ID, ORIGIN_RULE_ID2],
-      addRules: rules
-    }).catch(() => {});
   });
 }
 
 chrome.runtime.onInstalled.addListener(syncOriginRule);
 chrome.runtime.onStartup.addListener(syncOriginRule);
 chrome.storage.onChanged.addListener((changes) => { if (changes.branchMode || changes.enabled) syncOriginRule(); });
+// Keep the credentialed ACAO origin in step with the active tab (single-tab workflow).
+chrome.tabs.onActivated.addListener(() => syncOriginRule());
 
 // Signal the DevTools panel to clear when the inspected tab navigates.
 // chrome.devtools.network.onNavigated is unreliable in devtools pages;
 // chrome.tabs.onUpdated fires reliably from the background with no extra permissions.
 chrome.tabs.onUpdated.addListener(function(tabId, changeInfo) {
+  // A committed navigation changes the page origin — rebuild the credentialed ACAO rule.
+  if (changeInfo.url) syncOriginRule();
   if (changeInfo.status !== 'loading') return;
   chrome.storage.local.get({ devtoolsTabId: -1 }, function(d) {
     if (d.devtoolsTabId === tabId) {

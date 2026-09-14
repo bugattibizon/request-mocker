@@ -61,17 +61,19 @@
     _needBody = _rules.some(r => r._body);
 
     var bm = state.branchMode || {};
-    _branch = (state.enabled && bm.enabled && bm.from && bm.to) ? parseBranch(bm.from, bm.to, bm.origin) : null;
+    // cookieAuth is the new flag; bm.origin kept for back-compat with older saved config.
+    var credentialed = !!(bm.cookieAuth || (bm.origin && String(bm.origin).trim()));
+    _branch = (state.enabled && bm.enabled && bm.from && bm.to) ? parseBranch(bm.from, bm.to, credentialed) : null;
   }
 
   // Normalise the Branch Mode config into { fromHost, toOrigin, credentialed }.
-  // credentialed = an "App origin" is configured, so cookie auth needs the redirect
-  // to send credentials (background.js pairs this with exact-origin CORS headers).
-  function parseBranch(from, to, appOrigin) {
+  // credentialed = "Cookie auth" is on, so the redirect must send credentials
+  // (background.js pairs this with exact-origin CORS headers using the page origin).
+  function parseBranch(from, to, credentialed) {
     try {
       var f = new URL(/^https?:\/\//.test(from) ? from : 'https://' + from);
       var t = new URL(/^https?:\/\//.test(to)   ? to   : 'https://' + to);
-      return { fromHost: f.hostname, toOrigin: t.origin, credentialed: !!(appOrigin && String(appOrigin).trim()) };
+      return { fromHost: f.hostname, toOrigin: t.origin, credentialed: !!credentialed };
     } catch (e) { return null; }
   }
 
