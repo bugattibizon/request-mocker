@@ -224,6 +224,10 @@ function applyActiveTab() {
   $('jenkinsPanel').style.display = isJenkins ? 'block': 'none';
   $('btnAdd').style.display        = isRules   ? ''     : 'none';
   $('btnAddHeader').style.display  = isHeaders ? ''     : 'none';
+  // Branch Mode / Jenkins have no add button — hide the (otherwise empty, white)
+  // footer bar so it doesn't show as a blank strip at the bottom.
+  var listFooter = document.querySelector('#viewList > .footer');
+  if (listFooter) listFooter.style.display = (isRules || isHeaders) ? '' : 'none';
   if (isHeaders) renderHeaders();
   if (isBranch)  renderBranch();
   if (isJenkins) renderJenkins();
