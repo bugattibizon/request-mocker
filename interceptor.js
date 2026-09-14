@@ -64,7 +64,10 @@
     _branch = (state.enabled && bm.enabled && bm.from && bm.to) ? parseBranch(bm.from, bm.to) : null;
   }
 
-  // Normalise the Branch Mode host pair into { fromHost, toOrigin }.
+  // Normalise the Branch Mode config into { fromHost, toOrigin }. Redirects always
+  // run credentialed: background.js synthesizes exact-origin CORS headers (using the
+  // active tab origin) + Access-Control-Allow-Credentials on every response, which is
+  // universal — cookie auth needs it, token auth is unaffected by the extra cookies.
   function parseBranch(from, to) {
     try {
       var f = new URL(/^https?:\/\//.test(from) ? from : 'https://' + from);
@@ -245,6 +248,8 @@
                      : (input instanceof Request ? input.body : init.body),
         headers,
       };
+      // Send credentials so any Set-Cookie is stored and cookies flow to the target.
+      init.credentials = 'include';
     } else if (_ih.length) {
       const headers = new Headers(init.headers || {});
       _ih.forEach(h => headers.set(h.name, h.value));
@@ -327,6 +332,8 @@
         _xhrHeaders.forEach(([name, value]) => {
           try { origSetRequestHeader(name, value); } catch(e) {}
         });
+        // Send credentials so any Set-Cookie is stored and cookies flow to the target.
+        try { xhr.withCredentials = true; } catch(e) {}
       } else {
         // No redirect — apply inject headers to the real request.
         _ih.forEach(h => { try { xhr.setRequestHeader(h.name, h.value); } catch {} });

@@ -112,6 +112,9 @@ function load(cb) {
     enabled       = d.enabled;
     injectHeaders = d.injectHeaders;
     branchMode    = d.branchMode || { enabled: false, from: '', to: '' };
+    // Drop legacy keys from older versions (free-text origin / cookieAuth flag) — the
+    // redirect is now always credentialed with an auto-detected origin.
+    delete branchMode.origin; delete branchMode.cookieAuth;
     jenkinsTheme  = d.jenkinsTheme || { enabled: false };
     darkTheme     = d.darkTheme;
     applyTheme();
@@ -216,27 +219,24 @@ function applyActiveTab() {
   var lt        = activeTab ? activeTab.dataset.lt : 'rules';
   var isHeaders = lt === 'headers';
   var isBranch  = lt === 'branch';
-  var isJenkins = lt === 'jenkins';
   var isRules   = lt === 'rules';
   $('ruleList').style.display     = isRules   ? ''     : 'none';
   $('ihPanel').style.display      = isHeaders ? 'flex' : 'none';
   $('branchPanel').style.display  = isBranch  ? 'block': 'none';
-  $('jenkinsPanel').style.display = isJenkins ? 'block': 'none';
   $('btnAdd').style.display        = isRules   ? ''     : 'none';
   $('btnAddHeader').style.display  = isHeaders ? ''     : 'none';
+  // Branch Mode has no add button — hide the (otherwise empty, white) footer bar
+  // so it doesn't show as a blank strip at the bottom.
+  var listFooter = document.querySelector('#viewList > .footer');
+  if (listFooter) listFooter.style.display = (isRules || isHeaders) ? '' : 'none';
   if (isHeaders) renderHeaders();
   if (isBranch)  renderBranch();
-  if (isJenkins) renderJenkins();
 }
 
 function renderBranch() {
   $('bmEnabled').checked = !!branchMode.enabled;
   $('bmFrom').value      = branchMode.from || '';
   $('bmTo').value        = branchMode.to   || '';
-}
-
-function renderJenkins() {
-  $('jkEnabled').checked = !!jenkinsTheme.enabled;
 }
 
 function showList() {
@@ -303,9 +303,9 @@ function updateCount() {
   $('countRules').textContent   = rules.length         ? activeRules + '/' + rules.length         : '';
   $('countHeaders').textContent = injectHeaders.length  ? activeIH   + '/' + injectHeaders.length  : '';
   $('countBranch').textContent  = (branchMode.enabled && branchMode.from && branchMode.to) ? 'on' : '';
-  $('countJenkins').textContent = jenkinsTheme.enabled ? 'on' : '';
-  var rs = $('ruleSummary');
-  if (rs) rs.innerHTML = rules.length ? '<b>' + activeRules + '</b> of <b>' + rules.length + '</b> active' : '';
+  // Jenkins lives as a standalone switch in the header, not a tab.
+  $('jkEnabled').checked = !!jenkinsTheme.enabled;
+  $('hdrJk').classList.toggle('on', !!jenkinsTheme.enabled);
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
@@ -532,6 +532,7 @@ $('fPagEnabled').addEventListener('change', function() {
 // Jenkins page-theme wiring
 $('jkEnabled').addEventListener('change', function() {
   jenkinsTheme.enabled = this.checked;
+  $('hdrJk').classList.toggle('on', this.checked);
   saveJenkins();
 });
 
