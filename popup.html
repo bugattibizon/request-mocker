@@ -59,6 +59,8 @@ body {
   box-shadow:0 6px 16px -6px var(--brand-glow),0 1px 0 rgba(255,255,255,.25) inset; }
 .hdr-id { display:flex; flex-direction:column; line-height:1; }
 .hdr-name { font-size:14px; font-weight:750; letter-spacing:-.01em; color:var(--text); }
+.hdr-ver { font:600 10px var(--mono); color:var(--text-dim); letter-spacing:0; vertical-align:1px; }
+.hdr-ver:empty { display:none; }
 .hdr-sub { font:600 9.5px/1 var(--mono); letter-spacing:.1em; text-transform:uppercase; color:var(--text-dim); margin-top:4px; }
 .hdr-spacer { flex:1; }
 .hdr-live { display:none; align-items:center; gap:6px; font:700 10px/1 var(--mono); letter-spacing:.14em;
@@ -375,7 +377,7 @@ body.dark .jp { color:var(--text-sec); }
       </svg>
     </span>
     <div class="hdr-id">
-      <div class="hdr-name">Request Mocker</div>
+      <div class="hdr-name">Request Mocker <span class="hdr-ver" id="hdrVer"></span></div>
       <div class="hdr-sub">Intercept · Mock · Redirect</div>
     </div>
     <span class="hdr-spacer"></span>

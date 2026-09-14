@@ -794,6 +794,13 @@ document.addEventListener('keydown', function(e) {
   if (e.key === 'f' && e.ctrlKey && $('viewForm').style.display !== 'none') { e.preventDefault(); openFormSearch(); }
 });
 
+// Show the extension version (read from the manifest so it never drifts).
+try {
+  var ver = chrome.runtime.getManifest().version;
+  var verEl = $('hdrVer');
+  if (verEl && ver) verEl.textContent = 'v' + ver;
+} catch (e) { /* not in an extension context */ }
+
 load(function(pendingImport) {
   render();
   applyActiveTab();
