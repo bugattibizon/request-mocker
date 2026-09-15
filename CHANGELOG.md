@@ -4,6 +4,17 @@ All notable changes to Request Mocker are recorded here. The version in
 `manifest.json` is the source of truth and is shown in the popup header.
 This project follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`.
 
+## [1.2.1]
+
+### Fixed
+- Branch Mode: intermittent CORS failure on token refresh. The redirect is now
+  **non-credentialed by default**, so a backend answering `Access-Control-Allow-Origin: *`
+  with header/token auth (devise_token_auth) is accepted natively — forcing credentials
+  made `*` illegal and broke the request. Cookie-based auth is available again via an
+  opt-in **Cookie auth** toggle (off by default), which uses the exact-origin credentialed
+  path. Also: never stamp a backend (From/To) host as the app origin, and never downgrade
+  a working exact-origin rule to a wildcard.
+
 ## [1.2.0]
 
 ### Added

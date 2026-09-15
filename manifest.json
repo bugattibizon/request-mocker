@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Request Mocker",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Intercept and mock HTTP requests on any webpage",
   "permissions": ["storage", "declarativeNetRequest"],
   "host_permissions": ["<all_urls>"],

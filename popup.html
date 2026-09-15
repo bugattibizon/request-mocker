@@ -442,10 +442,20 @@ body.dark .jp { color:var(--text-sec); }
         <label class="label">To host</label>
         <input type="text" id="bmTo" placeholder="cf-9792-api.warmy.io">
       </div>
+      <div style="display:flex;align-items:flex-start;gap:10px">
+        <label class="toggle toggle-sm" style="margin-top:1px">
+          <input type="checkbox" id="bmCookieAuth">
+          <span class="track"></span>
+        </label>
+        <div>
+          <div style="font-size:13px;font-weight:600">Cookie auth</div>
+          <div style="font-size:11px;color:var(--text-dim);line-height:1.5">Turn on only if the backend authenticates with a cookie. Leave off for header/token auth (default).</div>
+        </div>
+      </div>
       <div style="font-size:11px;color:var(--text-dim);line-height:1.6;border-top:1px solid var(--border);padding-top:12px">
         Every fetch/XHR request to <b>From host</b> (any method) is rerouted to <b>To host</b> — path, query and headers are preserved. <b>Mock Rules take precedence.</b><br><br>
         The <b>Origin</b> and <b>Referer</b> headers are stripped on requests to <b>To host</b>, so a backend with an origin allowlist accepts the redirected request.<br><br>
-        The redirect runs credentialed, with <code>Access-Control-Allow-Origin</code> = this tab's origin + credentials injected automatically — so both token auth and cookie auth (e.g. a token-refresh cookie) just work, no extra setup.<br><br>
+        By default the redirect is <b>non-credentialed</b> — it works with backends that answer <code>Access-Control-Allow-Origin: *</code> and header/token auth. Turn on <b>Cookie auth</b> only for a backend that needs a cookie; the response then gets an exact-origin <code>Access-Control-Allow-Origin</code> + credentials.<br><br>
         💡 Enable this first, then log in again so authentication happens against the target backend.
       </div>
     </div>

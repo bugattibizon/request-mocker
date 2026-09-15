@@ -12,7 +12,7 @@ function alive() {
 function sync() {
   if (!alive()) return;
   try {
-    chrome.storage.local.get({ rules: [], enabled: true, injectHeaders: [], branchMode: { enabled: false, from: '', to: '' } }, (data) => {
+    chrome.storage.local.get({ rules: [], enabled: true, injectHeaders: [], branchMode: { enabled: false, from: '', to: '', cookieAuth: false } }, (data) => {
       if (chrome.runtime && chrome.runtime.lastError) return;
       window.dispatchEvent(new CustomEvent('__RM_sync', { detail: data }));
       stampOrigin(data);
@@ -25,12 +25,22 @@ function sync() {
 // far more reliable than "the active tab", which may be a different tab when a
 // background token-refresh fires (that mismatch produced a CORS error on refresh).
 // Top frame only; only while Branch Mode is on.
+//
+// IMPORTANT: never stamp the backend (From/To) host as the app origin. Auth flows may
+// briefly load the API host as the top document (e.g. an OAuth redirect); stamping it
+// would set ACAO to the backend's own origin and break the next credentialed request
+// (the refresh preflight then fails: ACAO "https://<to-host>" != the app origin).
 var _lastOrigin = null;
+function bmHost(v) {
+  try { return new URL(/^https?:\/\//.test(v) ? v : 'https://' + v).hostname; } catch (e) { return ''; }
+}
 function stampOrigin(data) {
   try {
     if (window.top !== window.self) return;
     var bm = data && data.branchMode;
     if (!bm || !bm.enabled) return;
+    var h = location.hostname;
+    if (h && (h === bmHost(bm.from) || h === bmHost(bm.to))) return; // backend host — not the app
     var origin = location.origin;
     if (!/^https?:/.test(origin) || origin === _lastOrigin) return;
     _lastOrigin = origin;
