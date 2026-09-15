@@ -61,18 +61,20 @@
     _needBody = _rules.some(r => r._body);
 
     var bm = state.branchMode || {};
-    _branch = (state.enabled && bm.enabled && bm.from && bm.to) ? parseBranch(bm.from, bm.to) : null;
+    _branch = (state.enabled && bm.enabled && bm.from && bm.to) ? parseBranch(bm.from, bm.to, bm.cookieAuth) : null;
   }
 
-  // Normalise the Branch Mode config into { fromHost, toOrigin }. Redirects always
-  // run credentialed: background.js synthesizes exact-origin CORS headers (using the
-  // active tab origin) + Access-Control-Allow-Credentials on every response, which is
-  // universal — cookie auth needs it, token auth is unaffected by the extra cookies.
-  function parseBranch(from, to) {
+  // Normalise the Branch Mode config into { fromHost, toOrigin, credentialed }.
+  // By default redirects are NON-credentialed: most branch backends answer with
+  // Access-Control-Allow-Origin: * and header-based tokens (devise_token_auth), which
+  // works without cookies — and forcing credentials there is illegal against `*` and
+  // breaks the request. credentialed is opt-in ("Cookie auth") for backends that truly
+  // need a cookie; background.js then injects exact-origin CORS headers for it.
+  function parseBranch(from, to, cookieAuth) {
     try {
       var f = new URL(/^https?:\/\//.test(from) ? from : 'https://' + from);
       var t = new URL(/^https?:\/\//.test(to)   ? to   : 'https://' + to);
-      return { fromHost: f.hostname, toOrigin: t.origin };
+      return { fromHost: f.hostname, toOrigin: t.origin, credentialed: !!cookieAuth };
     } catch (e) { return null; }
   }
 
@@ -248,8 +250,10 @@
                      : (input instanceof Request ? input.body : init.body),
         headers,
       };
-      // Send credentials so any Set-Cookie is stored and cookies flow to the target.
-      init.credentials = 'include';
+      // Only send credentials when Cookie auth is on. Otherwise stay non-credentialed
+      // so the backend's Access-Control-Allow-Origin: * is accepted (it is illegal with
+      // credentials) and header-token auth works.
+      if (_branch && _branch.credentialed) init.credentials = 'include';
     } else if (_ih.length) {
       const headers = new Headers(init.headers || {});
       _ih.forEach(h => headers.set(h.name, h.value));
@@ -332,8 +336,8 @@
         _xhrHeaders.forEach(([name, value]) => {
           try { origSetRequestHeader(name, value); } catch(e) {}
         });
-        // Send credentials so any Set-Cookie is stored and cookies flow to the target.
-        try { xhr.withCredentials = true; } catch(e) {}
+        // Only send credentials when Cookie auth is on (see fetch path above).
+        if (_branch && _branch.credentialed) { try { xhr.withCredentials = true; } catch(e) {} }
       } else {
         // No redirect — apply inject headers to the real request.
         _ih.forEach(h => { try { xhr.setRequestHeader(h.name, h.value); } catch {} });

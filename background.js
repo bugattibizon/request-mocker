@@ -66,17 +66,24 @@ function activeTabOrigin(cb) {
   } catch (e) { cb(''); }
 }
 
+function bmHost(v) {
+  try { return new URL(/^https?:\/\//.test(v) ? v : 'https://' + v).hostname; } catch (e) { return ''; }
+}
+
 // Resolve the app origin for credentialed CORS: prefer the origin the page itself
 // stamped (bridge.js) — that is the true request initiator, so it stays correct even
 // when a background refresh fires while another tab is focused. Fall back to the active
-// tab only before the app page has stamped anything.
-function resolveAppOrigin(stamped, cb) {
-  if (stamped && /^https?:/.test(stamped)) { cb(stamped); return; }
-  activeTabOrigin(cb);
+// tab only before the app page has stamped anything. Reject any origin that is actually
+// a backend (From/To) host — the app origin is never the API host, and using it would
+// set ACAO to the backend's own origin and break the credentialed preflight.
+function resolveAppOrigin(stamped, backendHosts, cb) {
+  const ok = (o) => o && /^https?:/.test(o) && backendHosts.indexOf(new URL(o).hostname) === -1;
+  if (ok(stamped)) { cb(stamped); return; }
+  activeTabOrigin((o) => cb(ok(o) ? o : ''));
 }
 
 function syncOriginRule() {
-  chrome.storage.local.get({ enabled: true, branchMode: { enabled: false, from: '', to: '' }, appOrigin: '' }, (d) => {
+  chrome.storage.local.get({ enabled: true, branchMode: { enabled: false, from: '', to: '', cookieAuth: false }, appOrigin: '' }, (d) => {
     const bm = d.branchMode || {};
     const clear = () => chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: [ORIGIN_RULE_ID, ORIGIN_RULE_ID2] }).catch(() => {});
     if (d.enabled === false || !bm.enabled || !bm.to) { clear(); return; }
@@ -84,38 +91,51 @@ function syncOriginRule() {
     try { host = new URL(/^https?:\/\//.test(bm.to) ? bm.to : 'https://' + bm.to).hostname; }
     catch (e) { clear(); return; }
 
-    resolveAppOrigin(d.appOrigin, (appOrigin) => {
-      const stripReq = {
-        id: ORIGIN_RULE_ID, priority: 1,
-        action: { type: 'modifyHeaders', requestHeaders: [
-          { header: 'origin',  operation: 'remove' },
-          { header: 'referer', operation: 'remove' }
-        ]},
-        condition: { requestDomains: [host], excludedRequestMethods: ['options'], resourceTypes: ['xmlhttprequest'] }
-      };
-      const rules = [stripReq];
-      if (appOrigin) {
-        // Exact-origin ACAO + credentials on every response (incl. preflight) so the
-        // redirect is readable and any Set-Cookie is stored. Universal: works for both
-        // cookie auth and token auth.
-        rules.push({
-          id: ORIGIN_RULE_ID2, priority: 1,
-          action: { type: 'modifyHeaders', responseHeaders: [
-            { header: 'access-control-allow-origin',      operation: 'set', value: appOrigin },
-            { header: 'access-control-allow-credentials', operation: 'set', value: 'true' }
-          ]},
-          condition: { requestDomains: [host], resourceTypes: ['xmlhttprequest'] }
-        });
-      } else {
-        // Origin not resolvable yet (no normal page focused) — degrade to wildcard ACAO
-        // on the actual response. Re-syncs to exact-origin once the app tab is active.
-        stripReq.action.responseHeaders = [
-          { header: 'access-control-allow-origin', operation: 'set', value: '*' }
-        ];
-      }
+    // Strip Origin/Referer on the actual (non-OPTIONS) request so a backend with an
+    // origin allowlist accepts the rerouted request. This is a REQUEST-header edit,
+    // which DNR applies reliably (unlike response edits on the preflight).
+    const stripReq = {
+      id: ORIGIN_RULE_ID, priority: 1,
+      action: { type: 'modifyHeaders', requestHeaders: [
+        { header: 'origin',  operation: 'remove' },
+        { header: 'referer', operation: 'remove' }
+      ]},
+      condition: { requestDomains: [host], excludedRequestMethods: ['options'], resourceTypes: ['xmlhttprequest'] }
+    };
+
+    if (!bm.cookieAuth) {
+      // Default (non-credentialed): the request is not credentialed, so the backend's
+      // own Access-Control-Allow-Origin (typically `*`) satisfies the browser's CORS
+      // check on its own. We do NOT try to rewrite the response — DNR response edits do
+      // not reliably apply to the CORS preflight anyway. Just strip the request Origin.
       chrome.declarativeNetRequest.updateDynamicRules({
         removeRuleIds: [ORIGIN_RULE_ID, ORIGIN_RULE_ID2],
-        addRules: rules
+        addRules: [stripReq]
+      }).catch(() => {});
+      return;
+    }
+
+    // Cookie auth (opt-in): the request is credentialed, so `*` is illegal — the response
+    // must carry an exact-origin ACAO + Access-Control-Allow-Credentials. That relies on
+    // DNR rewriting the response (incl. preflight), which is less reliable; only used when
+    // the user explicitly needs cookies.
+    const backendHosts = [host, bmHost(bm.from)].filter(Boolean);
+    resolveAppOrigin(d.appOrigin, backendHosts, (appOrigin) => {
+      // Can't resolve a valid app origin right now — keep whatever rule is installed
+      // rather than clobbering a working setup with a broken one.
+      if (!appOrigin) return;
+      const corsRule = {
+        id: ORIGIN_RULE_ID2, priority: 1,
+        action: { type: 'modifyHeaders', responseHeaders: [
+          { header: 'access-control-allow-origin',      operation: 'set', value: appOrigin },
+          { header: 'access-control-allow-credentials', operation: 'set', value: 'true' },
+          { header: 'access-control-max-age',           operation: 'set', value: '0' }
+        ]},
+        condition: { requestDomains: [host], resourceTypes: ['xmlhttprequest'] }
+      };
+      chrome.declarativeNetRequest.updateDynamicRules({
+        removeRuleIds: [ORIGIN_RULE_ID, ORIGIN_RULE_ID2],
+        addRules: [stripReq, corsRule]
       }).catch(() => {});
     });
   });

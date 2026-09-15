@@ -11,7 +11,7 @@ var rules = [];
 var enabled = true;
 var editId = null;
 var injectHeaders = [];
-var branchMode = { enabled: false, from: '', to: '' };
+var branchMode = { enabled: false, from: '', to: '', cookieAuth: false };
 var jenkinsTheme = { enabled: false };
 var responseHeaderRows = [];
 var darkTheme = false;
@@ -107,14 +107,12 @@ document.addEventListener('click', function(e) {
 
 // ── Storage ──────────────────────────────────────────────────────────────────
 function load(cb) {
-  chrome.storage.local.get({ rules: [], enabled: true, injectHeaders: [], branchMode: { enabled: false, from: '', to: '' }, jenkinsTheme: { enabled: false }, darkTheme: false, pendingImport: null }, function(d) {
+  chrome.storage.local.get({ rules: [], enabled: true, injectHeaders: [], branchMode: { enabled: false, from: '', to: '', cookieAuth: false }, jenkinsTheme: { enabled: false }, darkTheme: false, pendingImport: null }, function(d) {
     rules         = d.rules;
     enabled       = d.enabled;
     injectHeaders = d.injectHeaders;
-    branchMode    = d.branchMode || { enabled: false, from: '', to: '' };
-    // Drop legacy keys from older versions (free-text origin / cookieAuth flag) — the
-    // redirect is now always credentialed with an auto-detected origin.
-    delete branchMode.origin; delete branchMode.cookieAuth;
+    branchMode    = d.branchMode || { enabled: false, from: '', to: '', cookieAuth: false };
+    delete branchMode.origin; // legacy free-text app-origin field, superseded by auto-detect
     jenkinsTheme  = d.jenkinsTheme || { enabled: false };
     darkTheme     = d.darkTheme;
     applyTheme();
@@ -234,9 +232,10 @@ function applyActiveTab() {
 }
 
 function renderBranch() {
-  $('bmEnabled').checked = !!branchMode.enabled;
-  $('bmFrom').value      = branchMode.from || '';
-  $('bmTo').value        = branchMode.to   || '';
+  $('bmEnabled').checked    = !!branchMode.enabled;
+  $('bmFrom').value         = branchMode.from || '';
+  $('bmTo').value           = branchMode.to   || '';
+  $('bmCookieAuth').checked = !!branchMode.cookieAuth;
 }
 
 function showList() {
@@ -539,6 +538,10 @@ $('jkEnabled').addEventListener('change', function() {
 // Branch Mode wiring
 $('bmEnabled').addEventListener('change', function() {
   branchMode.enabled = this.checked;
+  saveBranch();
+});
+$('bmCookieAuth').addEventListener('change', function() {
+  branchMode.cookieAuth = this.checked;
   saveBranch();
 });
 ['bmFrom','bmTo'].forEach(function(id) {
